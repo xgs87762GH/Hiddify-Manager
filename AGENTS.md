@@ -26,6 +26,21 @@ Read [DEVELOPMENT.md](DEVELOPMENT.md) first: the setup, where things are, how to
 
 判断当前该不该提交：只要改动会进 `dev`，就停下来确认。镜像分支一旦混入自定义代码，后续同步官方就会分叉，这是本仓库最不希望出现的状态。
 
+### 面板子模块（真正的 Python 代码在这里）
+
+`services/panel/src` 是独立仓库（官方 `hiddify/hiddifypanel`），Manager 仓库只记录一个 commit 指针，不含它的代码。**面板逻辑的改动必须提交到子模块，改 Manager 仓库没用。**
+
+| 名称 | 类型 | 指向 | 约束 |
+| --- | --- | --- | --- |
+| `upstream` | 子模块 remote | `git@github.com:hiddify/hiddifypanel.git` | 只读，官方 panel |
+| `fork` | 子模块 remote | `git@github.com:xgs87762GH/hiddifypanel.git` | 个人 fork，panel 改动推这里 |
+| `dev` | 子模块镜像分支 | 跟踪 `upstream/dev` | 禁止提交 |
+| `dev-custom` | 子模块开发分支 | 跟踪 `fork/dev-custom` | panel 代码只写这里 |
+
+分支模型与外层一致：子模块 `dev` 也是官方镜像。外层 `dev` 记录的子模块 SHA 来自官方，外层 `dev-custom` 记录的 SHA 来自 fork。
+
+`.gitmodules` 在 `dev-custom` 上被改成了 fork 的 SSH 地址（官方值 `https://github.com/hiddify/Hiddify-Panel.git` 在本机走不通，HTTPS 被网络重置）；`dev` 分支上的 `.gitmodules` 保持官方原样，同步冲突时按官方为准。
+
 ### 硬性禁令
 
 1. 禁止在 `dev` 上 commit、rebase 或 force push。
@@ -35,8 +50,12 @@ Read [DEVELOPMENT.md](DEVELOPMENT.md) first: the setup, where things are, how to
 5. 禁止编辑 `data/` 与 `generated/`（运行时状态与生成物，官方约定）。
 6. 禁止重启服务或执行迁移脚本；面板重启会迁移服务器数据库。
 7. 禁止把口令、私钥、token 写进仓库文件（`docker.env` 等配置只放占位值）。
+8. 禁止在子模块的游离 HEAD 上提交。`git submodule update` 之后子模块默认是 detached，必须 `git checkout dev-custom` 再改代码。
+9. 禁止让 Manager 的指针指向子模块里尚未推送的 commit：先推 `fork`，再在外层 commit 指针，顺序反了别人 clone 就会报 `Failed to fetch`。
 
 ### 同步官方新功能
+
+外层 Manager：
 
 ```bash
 git checkout dev
@@ -44,6 +63,16 @@ git pull --ff-only upstream dev     # 镜像只接受 fast-forward，报错即�
 git checkout dev-custom
 git merge dev                       # 冲突逐处处理
 git push origin dev dev-custom      # 同步推回 fork，保持远端镜像一致
+```
+
+子模块 panel（改了 panel 代码时才需要）：
+
+```bash
+cd services/panel/src
+git checkout dev && git pull --ff-only upstream dev
+git checkout dev-custom && git merge dev        # 官方新代码合进自定义分支
+git push fork dev-custom                        # 先推子模块
+cd ../.. && git add services/panel/src && git commit   # 后记指针
 ```
 
 ### 其它
