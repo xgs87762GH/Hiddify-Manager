@@ -12,25 +12,9 @@ fi
 mkdir -p /opt/hiddify-manager/data/hiddify-core
 set_files_in_folder_readable_to_hiddify_common_group /opt/hiddify-manager/generated/hiddify-core.json
 
-# curl -s -x socks://127.0.0.1:3000 http://ip-api.com?fields=message,country,countryCode,city,isp,org,as,query
-
-# hiddify-core check -c /opt/hiddify-manager/generated/hiddify-core.json
 rm /opt/hiddify-manager/data/hiddify-core/tor/lock 2>/dev/null || true
-echo "ignoring hiddify-core test"
-if [[ $? == 0 ]]; then
-	#systemctl restart hiddify-core.service
+if config_check_ok hiddify-core /opt/hiddify-manager/generated/hiddify-core.json \
+	/opt/hiddify-manager/services/hiddify-core/hiddify-core check -c /opt/hiddify-manager/generated/hiddify-core.json; then
 	systemctl reload hiddify-core.service
 	systemctl start hiddify-core.service
-	# systemctl status hiddify-core.service --no-pager
-else
-	echo "Error in hiddify-core Config!!!! do not reload hiddify-core service"
-	sleep 3
-	hiddify-core check -c /opt/hiddify-manager/generated/hiddify-core.json
-	if [[ $? == 0 ]]; then
-		systemctl reload hiddify-core.service
-		systemctl start hiddify-core.service
-		systemctl status hiddify-core.service --no-pager
-	else
-		echo "Error in hiddify-core Config!!!! do not reload hiddify-core service"
-	fi
 fi

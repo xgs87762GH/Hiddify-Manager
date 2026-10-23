@@ -1016,18 +1016,42 @@ function hiddify_service_units() {
     ) | sort -u
 }
 
-function hiddify-panel-run() {
-    local user=$(whoami)
-    local base_command="export HIDDIFY_CFG_PATH='$HIDDIFY_PANEL_CFG_PATH'; cd /opt/hiddify-manager/services/panel/; source ${venv_path}/bin/activate && $@"
-    local command=""
-
-    if [ "$user" == "hiddify-panel" ]; then
-        command="$base_command"
-    else
-        command="su hiddify-panel -c \"$base_command\""
+# Validate a generated config before (re)loading the service that consumes it.
+# config_check_ok <label> <config-file> <checker-command...>
+# Refusing to reload leaves the previous good config running, which is safer than a
+# restart loop. Anything that looks like the checker itself being broken (missing
+# binary, unknown subcommand, config not generated yet) must NOT block a reload.
+function config_check_ok() {
+    local label="$1" config_file="$2"
+    shift 2
+    if [ ! -f "$config_file" ]; then
+        echo "config check skipped for $label: $config_file does not exist yet"
+        return 0
     fi
+    local output rc=0
+    output=$("$@" 2>&1) || rc=$?
+    if [ $rc -eq 0 ]; then
+        return 0
+    fi
+    if [ $rc -eq 127 ] || echo "$output" | grep -qiE 'unknown command|invalid choice|flag provided but not defined|^usage:'; then
+        echo "config check unavailable for $label (checker reported usage/not-found), reloading anyway"
+        return 0
+    fi
+    echo "Error in $label Config!!!! do not reload $label service"
+    if [ -n "$output" ]; then echo "$output"; fi
+    return 1
+}
 
-    eval "$command"
+function hiddify-panel-run() {
+    local base_command="export HIDDIFY_CFG_PATH='$HIDDIFY_PANEL_CFG_PATH'; cd /opt/hiddify-manager/services/panel/; source ${venv_path}/bin/activate && $*"
+
+    # No eval: the command is complete already, and parsing it a second time would run whatever an
+    # argument happens to contain (this is reachable from the panel through the sudo commander).
+    if [ "$(whoami)" == "hiddify-panel" ]; then
+        bash -c "$base_command"
+    else
+        su hiddify-panel -c "$base_command"
+    fi
 }
 
 function hiddify-panel-cli() {
