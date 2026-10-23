@@ -18,10 +18,11 @@ chown -R hiddify-panel:hiddify-panel "$PANEL_DIR" >/dev/null 2>&1
 mkdir -p "$(dirname "$APP_CFG")"
 if [ ! -f "$APP_CFG" ]; then
     cp "$TEMPLATE_CFG" "$APP_CFG"
-    # Rotate placeholder secret on first durable copy only
-    if grep -qE '^SECRET_KEY=Pl3453Ch4ng3[[:space:]]*$' "$APP_CFG"; then
-        sed -i "s/^SECRET_KEY=.*/SECRET_KEY=$(hiddify_random_password)/" "$APP_CFG"
-    fi
+fi
+# Rotate the shipped placeholder on every start, not only on the first copy: an install that still
+# has it lets anyone forge an admin session. Rotating signs those sessions out.
+if grep -qE "^SECRET_KEY[[:space:]]*=[[:space:]]*'?Pl3453Ch4ng3'?[[:space:]]*$" "$APP_CFG"; then
+    sed -i "s/^SECRET_KEY[[:space:]]*=.*/SECRET_KEY=$(hiddify_random_password)/" "$APP_CFG"
 fi
 chmod 600 "$APP_CFG"
 

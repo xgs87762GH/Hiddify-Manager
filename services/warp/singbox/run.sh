@@ -53,7 +53,9 @@ ensure_warp_data_links singbox "$(pwd)"
 ./warp-go --config=warp.conf --export-singbox=warp-singbox.json
 
 
-sed -i "s|2000|3000|g" warp-singbox.json
+# The WARP endpoint port only: a global s|2000|3000|g also rewrites the same digits inside the
+# base64 keys and addresses, and sing-box then rejects the whole config.
+sed -i 's/"server_port":[[:space:]]*2000\b/"server_port":3000/' warp-singbox.json
 if ! warp_host_has_ipv6; then
 sed -i 's/"local_address":\[[^]]*\]/"local_address":["172.16.0.2\/32"]/' warp-singbox.json
 

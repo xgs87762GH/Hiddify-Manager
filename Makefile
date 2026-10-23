@@ -8,7 +8,8 @@ debug-panel:
 	HIDDIFY_CFG_PATH=/opt/hiddify-manager/data/hiddify-panel/app.cfg \
 	FLASK_APP=wsgi.py \
 	FLASK_DEBUG=1 \
-	python -m flask run --host=0.0.0.0 --port=9000 --reload\
+	python -m flask run --host=0.0.0.0 --port=9000 --reload)
+.PHONY: debug debug-panel
 
 # In /opt/hiddify-manager (the git clone itself, DEVELOPMENT.md): reinstall the panel from services/panel/src and apply
 # the configs in place. From a clone elsewhere: copy it over /opt/hiddify-manager first (the older way).
@@ -50,7 +51,7 @@ latest-tags:
 
 dev:
 	@echo "dev" > VERSION
-	@gitchangelog > HISTORY.md || { git tag -d $${TAG}; echo "Please run pip install gitchangelog pystache mustache markdown"; exit 2; } 
+	@gitchangelog > HISTORY.md || { echo "Please run pip install gitchangelog pystache mustache markdown"; exit 2; } 
 	@make -C ./services/panel/src dev
 	@git add VERSION HISTORY.md services/panel/src
 	@git commit -m "release: switch to develop"
