@@ -7,6 +7,63 @@ source /opt/hiddify-manager/scripts/common/utils.sh
 NAME="update"
 LOG_FILE="$(log_file $NAME)"
 
+# Which GitHub repo the "download a release" fallback reads its scripts from.
+# A git checkout never uses it (update_from_git below), but set it to your own
+# fork if you also want the fallback to be yours:
+#   export HIDDIFY_MANAGER_REPO="xgs87762GH/Hiddify-Manager"
+: "${HIDDIFY_MANAGER_REPO:=hiddify/Hiddify-Manager}"
+
+# Update a git checkout (a fork you own) in place instead of downloading a release.
+# Override with HIDDIFY_GIT_REMOTE / HIDDIFY_GIT_BRANCH (defaults: origin / current branch).
+function update_from_git() {
+    local remote="${HIDDIFY_GIT_REMOTE:-origin}"
+    local branch="${HIDDIFY_GIT_BRANCH:-$(git -C "$HIDDIFY_DIR" rev-parse --abbrev-ref HEAD)}"
+
+    echo "Updating $HIDDIFY_DIR from $remote/$branch ..."
+    update_progress "Hiddify Updater" "Creating a backup" 10
+    (cd "$HIDDIFY_DIR" && ./services/panel/backup.sh)
+
+    cd "$HIDDIFY_DIR" || return 1
+    # the checkout is root-owned but is also touched by other accounts (hiddify-panel, ...)
+    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$HIDDIFY_DIR" ||
+        git config --global --add safe.directory "$HIDDIFY_DIR" >/dev/null 2>&1
+
+    update_progress "Hiddify Updater" "Fetching $remote/$branch" 25
+    git fetch --prune "$remote" "$branch" || { error "git fetch $remote/$branch failed"; return 1; }
+
+    local local_head remote_head
+    local_head=$(git rev-parse HEAD)
+    remote_head=$(git rev-parse "$remote/$branch" 2>/dev/null)
+    if [[ -z "$remote_head" ]]; then
+        error "branch $remote/$branch does not exist"
+        return 1
+    fi
+
+    if [[ "$local_head" == "$remote_head" ]]; then
+        echo "Already up to date ($local_head)"
+    else
+        # fast-forward only: never clobber local edits with a merge or a rebase
+        git merge --ff-only "$remote/$branch" || {
+            error "Cannot fast-forward to $remote/$branch."
+            error "Resolve it by hand: cd $HIDDIFY_DIR && git status"
+            return 1
+        }
+        update_progress "Hiddify Updater" "Syncing submodules" 45
+        git submodule update --init --recursive || { error "git submodule update failed"; return 1; }
+    fi
+
+    update_progress "Hiddify Updater" "Applying the new code" 60
+    # the running panel stays the old code until install.sh restarts it at the end
+    export HIDDIFY_NO_HTTP_API=true
+    if command -v make >/dev/null 2>&1; then
+        make build || return 1
+    else
+        bash scripts/install.sh --no-gui --no-log || return 1
+    fi
+    update_progress "Hiddify Updater" "Finished" 100
+    return 0
+}
+
 # Install may replace this file while we are still reading it. Re-exec from a private copy so the
 # running bash keeps a stable script (avoids "syntax error near unexpected token fi" after Finished!).
 if [[ -z "${HIDDIFY_UPDATE_COPIED:-}" && -f "$0" && "$0" == */scripts/update.sh ]]; then
@@ -29,9 +86,12 @@ trap cleanup SIGINT
 
 function main() {
     if is_dev_checkout; then
-        warning "$HIDDIFY_DIR is a git checkout (development): not overwriting it with a download."
-        warning "Update it with: cd $HIDDIFY_DIR && git pull --recurse-submodules && make build"
-        return 0
+        # A git checkout (development / own fork): update from git, never overwrite it with a download.
+        update_from_git
+        local rc=$?
+        remove_lock $NAME
+        echo "---------------------Finished!------------------------"
+        return $rc
     fi
     update_progress "Hiddify Updater" "Checking for update" 1
     echo "Checking for update..."
@@ -63,20 +123,20 @@ function main() {
         # Use the latest commit from GitHub
         latest_panel=$(get_commit_version Hiddify-Panel)
         latest_manager=$(get_commit_version hiddify-manager)
-        update_script="https://raw.githubusercontent.com/hiddify/Hiddify-Manager/refs/heads/dev/scripts/common/download.sh"
+        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/dev/scripts/common/download.sh"
         ;;
     beta)
         latest_panel=$(get_pre_release_version hiddify-panel)
         latest_manager=$(get_pre_release_version hiddify-manager)
-        update_script="https://raw.githubusercontent.com/hiddify/Hiddify-Manager/refs/heads/beta/scripts/common/download.sh"
+        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/beta/scripts/common/download.sh"
         ;;
     release)
         latest_panel=$(get_release_version hiddify-panel)
         latest_manager=$(get_release_version hiddify-manager)
-        update_script="https://raw.githubusercontent.com/hiddify/Hiddify-Manager/refs/heads/main/scripts/common/download.sh"
+        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/main/scripts/common/download.sh"
         ;;
     *)
-        update_script="https://raw.githubusercontent.com/hiddify/Hiddify-Manager/refs/heads/main/scripts/common/download.sh"
+        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/main/scripts/common/download.sh"
         ;;
     esac
 

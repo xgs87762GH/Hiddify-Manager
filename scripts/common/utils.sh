@@ -383,7 +383,10 @@ function remove_package() {
 # The built UI (hiddifypanel/static/admin-v2/) is not in git. Release/beta wheels
 # ship it prebuilt (release workflow); every install from source builds it here.
 
-HIDDIFY_PANEL_GIT_URL="https://github.com/hiddify/HiddifyPanel"
+# Override to build the admin UI from your own fork:
+#   export HIDDIFY_PANEL_REPO="xgs87762GH/hiddifypanel"
+: "${HIDDIFY_PANEL_REPO:=hiddify/HiddifyPanel}"
+HIDDIFY_PANEL_GIT_URL="https://github.com/${HIDDIFY_PANEL_REPO}"
 
 function _node_major() {
     command -v node >/dev/null 2>&1 || { echo 0; return; }
