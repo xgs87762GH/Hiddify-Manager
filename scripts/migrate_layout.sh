@@ -46,9 +46,31 @@ disable_all_services() {
     tee /dev/stderr |
     xargs -r -I{} systemctl disable --now {}
 }
+# Stop a unit and make sure its process is really gone. Once the unit file is removed systemd can no
+# longer load (or stop) it, and a process left behind keeps its ports bound, which stops the
+# new-layout service that needs them from starting (old sing-box holding port 2000).
+stop_unit_and_confirm() {
+    local unit="$1" pid cmd i
+    systemctl disable --now "$unit" >/dev/null 2>&1 || systemctl stop "$unit" >/dev/null 2>&1 || true
+    pid="$(systemctl show -p MainPID --value "$unit" 2>/dev/null || echo 0)"
+    case "$pid" in ''|*[!0-9]*|0*) return 0 ;; esac
+    cmd="$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)"
+    case "$cmd" in
+        *hiddify*|*xray*|*sing-box*|*haproxy*|*nginx*) ;;
+        *) log "not killing pid $pid ($cmd): it does not look like a hiddify process"
+           return 0 ;;
+    esac
+    log "$unit did not stop, killing its leftover process $pid"
+    kill -TERM "$pid" 2>/dev/null || true
+    for i in 1 2 3 4 5; do
+        kill -0 "$pid" 2>/dev/null || break
+        sleep 1
+    done
+    kill -KILL "$pid" 2>/dev/null || true
+}
 stop_old_units() {
     local link unit target
-    local services_real hid_dir_real
+    local services_real hid_dir_real removed=0
     services_real="$(readlink -m "$SERVICES")"
     hid_dir_real="$(readlink -m "$HIDDIFY_DIR")"
     for link in /etc/systemd/system/*.service; do
@@ -65,8 +87,9 @@ stop_old_units() {
         # gone, systemd can no longer load it and the old process would keep
         # running (and holding its ports) until the next reboot.
         log "stopping leftover unit $unit"
-        systemctl disable --now "$unit" >/dev/null 2>&1 || systemctl stop "$unit" >/dev/null 2>&1 || true
+        stop_unit_and_confirm "$unit"
         rm -f "/etc/systemd/system/multi-user.target.wants/$unit" "$link"
+        removed=1
     done
     # stale enable links whose unit file is already gone
     for link in /etc/systemd/system/multi-user.target.wants/*.service; do
@@ -77,15 +100,19 @@ stop_old_units() {
             "$hid_dir_real"/*|/opt/hiddify-server/*|/opt/hiddify-config/*)
                 log "removing stale enable link $(basename "$link")"
                 rm -f "$link"
+                removed=1
                 ;;
         esac
     done
+    if [ "$removed" = 1 ]; then
+        systemctl daemon-reload 2>/dev/null || true # make systemd forget the units just removed
+    fi
 }
 
 rename_singbox_unit() {
     if [ -e /etc/systemd/system/hiddify-singbox.service ] || [ -L /etc/systemd/system/hiddify-singbox.service ]; then
         log "replacing hiddify-singbox.service with hiddify-core.service"
-        systemctl disable --now hiddify-singbox.service 2>/dev/null || true
+        stop_unit_and_confirm hiddify-singbox.service
         rm -f /etc/systemd/system/hiddify-singbox.service
     fi
     if [ -f "$SERVICES/hiddify-core/hiddify-core.service" ]; then
