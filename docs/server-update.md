@@ -155,4 +155,18 @@ make build
 
 - 升级会重启 `hiddify-panel`，服务会中断数分钟，在线连接会断开。
 - 面板启动时会跑数据库迁移。判断某次升级是否涉及库结构，看
-  `git -C services/panel/src diff --name-only <旧> <新> -- hiddifypanel/migrations` 是否为空。
+  `git -C services/panel/src diff --name-only <旧> <新> -- hiddifypanel/panel/init_db.py` 是否为空。
+
+  面板**没有** Alembic 迁移目录（`hiddifypanel/migrations` 不存在），库结构由 `init_db.py` 里的
+  `_vNNN` 函数链维护，启动时按版本号顺序执行。所以只改 `models/` 而不改 `init_db.py` 的提交
+  通常不会动库结构，但列/枚举的同步是每次启动都做的通用逻辑，不能只看 diff 判断。
+- 面板硬依赖 MySQL：`init_db.py` 用 `SHOW COLUMNS FROM ... LIKE ...` 读 enum 列定义，
+  SQLite 等其它后端不支持。本地想跑起来验证必须准备 MariaDB/MySQL，不能用 SQLite 图省事。
+- 面板硬依赖 Redis：缓存、session、`evalsha` 都用它，`fakeredis` 之类替身跑不通，必须起真 Redis。
+- 全新库初始化会从 `_v1` 一路跑到 `_v184`，实测在 MariaDB 11.8 上建出 21 张表 + 存储过程
+  `add_usage_json`，耗时约 0.5 秒。`_v140` 里那条 `DROP PROCEDURE ...; CREATE PROCEDURE ...`
+  是**两条语句拼在一次 `db_execute`** 里，SQLAlchemy `text()` 默认不允许多语句。若某次升级在这步
+  报 `You have an error in your SQL syntax ... near 'CREATE PROCEDURE'`，说明环境里驱动开了多语句
+  才过得去；这不是升级脚本的问题，先确认面板版本与数据库版本是否匹配再重试。
+- 面板完整启动后实测：445 条路由、31 个蓝图、调度器 9 个任务；`/<proxy_path>/` 正常返回，
+  未登录访问 `/<proxy_path>/admin/` 返回 302 跳登录，属正常。
