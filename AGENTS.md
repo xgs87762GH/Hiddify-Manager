@@ -39,7 +39,7 @@ Read [DEVELOPMENT.md](DEVELOPMENT.md) first: the setup, where things are, how to
 
 分支模型与外层一致：子模块 `dev` 也是官方镜像。外层 `dev` 记录的子模块 SHA 来自官方，外层 `dev-custom` 记录的 SHA 来自 fork。
 
-`.gitmodules` 在 `dev-custom` 上被改成了 fork 的 SSH 地址（官方值 `https://github.com/hiddify/Hiddify-Panel.git` 在本机走不通，HTTPS 被网络重置）；`dev` 分支上的 `.gitmodules` 保持官方原样，同步冲突时按官方为准。
+`.gitmodules` 在 `dev-custom` 上指向 fork 的 HTTPS 地址 `https://github.com/xgs87762GH/hiddifypanel.git`：服务器匿名克隆子模块不需要部署 ssh key（fork 是公开的），推送仍在子模块内走 ssh，互不影响。官方值 `https://github.com/hiddify/Hiddify-Panel.git` 不适用于本 fork；`dev` 分支上的 `.gitmodules` 保持官方原样，同步冲突时按官方为准。
 
 ### 硬性禁令
 
