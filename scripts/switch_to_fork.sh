@@ -2,10 +2,10 @@
 # Turn /opt/hiddify-manager from a downloaded release into a git checkout of your own fork,
 # then apply it. Safe to re-run: when it is already a checkout it just updates from git.
 #
-#   bash <(curl -sSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/mine/scripts/switch_to_fork.sh)
+#   bash <(curl -sSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/refs/heads/dev-custom/scripts/switch_to_fork.sh)
 #
 # Options (each also has an environment variable):
-#   --branch <name>      branch to track             (default: mine,   $HIDDIFY_FORK_BRANCH)
+#   --branch <name>      branch to track             (default: dev-custom, $HIDDIFY_FORK_BRANCH)
 #   --fork <url>         your Hiddify-Manager fork   (default: $HIDDIFY_FORK_URL)
 #   --panel-repo <o/r>   also track your panel fork  (default: keep official, $HIDDIFY_PANEL_REPO)
 #   --base <branch>      upstream branch to diff against (default: main)
@@ -18,7 +18,7 @@
 ROOT="${HIDDIFY_DIR:-/opt/hiddify-manager}"
 FORK_URL="${HIDDIFY_FORK_URL:-https://github.com/xgs87762GH/Hiddify-Manager.git}"
 UPSTREAM_URL="${HIDDIFY_UPSTREAM_URL:-https://github.com/hiddify/Hiddify-Manager.git}"
-BRANCH="${HIDDIFY_FORK_BRANCH:-mine}"
+BRANCH="${HIDDIFY_FORK_BRANCH:-dev-custom}"
 PANEL_REPO="${HIDDIFY_PANEL_REPO:-}"
 BASE="${HIDDIFY_UPSTREAM_BASE:-main}"
 DO_BACKUP=1
