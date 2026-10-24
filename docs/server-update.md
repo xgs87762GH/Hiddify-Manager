@@ -70,12 +70,47 @@ bash /tmp/sw.sh
 
 ## 4. 构建要求
 
-管理端 UI 的构建产物不在 git 里，必须在服务器上构建：
+管理端 UI 的构建产物不在 git 里（`.gitignore` 忽略了 `hiddifypanel/static/admin-v2/`），必须在服务器上构建：
 
 - Node.js >= 18（缺失时脚本自动安装）
 - 约 1.2 GB 空闲内存，脚本会自动挂临时 swap；仍失败（退出码 137）就手动加 2G swap 再跑
 - 源文件比 `hiddifypanel/static/admin-v2/index.html` 新时才会重建，所以改了 `src`、`translations.i18n`、
   `package-lock.json`、`vite.config.ts` 的提交一定会触发重建
+
+实测数据（node v22 / npm 9，16 核）：
+
+| 阶段 | 耗时 | 峰值内存 |
+| --- | --- | --- |
+| `npm ci`（200 包） | 3.6 s | 495 MB |
+| `npm run build` | 7.9 s | 980 MB |
+| 产物 | 151 个文件 / 11 MB，入口 `assets/index-*.js` | — |
+
+CPU 不是瓶颈，1 核也能在分钟级完成；内存才是。1 GB 内存的机器必须依赖脚本自动挂的 swap。
+
+### 译文件在构建期编译，语法错误会让构建直接失败
+
+`hiddifypanel/translations.i18n/*.json` 是通过 `import.meta.glob` 在**构建期**打进包的
+（`admin_v2/src/core/i18n/index.ts`），不是运行时读文件。任一译文件 JSON 不合法，`npm run build` 会以退出码 1 结束：
+
+```
+error during build:
+[hiddify-admin-v2-translations] Expected ',' or '}' after property value in JSON at position ...
+```
+
+因为 `update.sh` 是**先 `git merge --ff-only` 再 `make build`**，构建失败时 git 已经指向新版本、`install.sh` 却没执行，
+结果是"代码是新的、面板还跑着旧的"这种半升级状态。遇到构建失败不要反复重跑，先修代码或回滚（第 6 节），
+再用 `git log --oneline -1` 与 `systemctl status hiddify-panel` 确认两边版本一致。
+
+### 构建会改脏 `components.d.ts`
+
+构建后 `services/panel/src/hiddifypanel/admin_v2/components.d.ts` 会被 `unplugin-vue-components` 重写，
+而它是被 git 跟踪的，于是工作区出现 `M`。这会让**下一次**升级的 `--ff-only` 报 `Cannot fast-forward`。
+升级后看到这个 `M` 直接丢弃即可：
+
+```bash
+cd /opt/hiddify-manager/services/panel/src
+git checkout -- hiddifypanel/admin_v2/components.d.ts
+```
 
 ## 5. 升级后验证
 
@@ -110,9 +145,10 @@ make build
 
 | 现象 | 原因与处理 |
 | --- | --- |
-| `Cannot fast-forward` | 服务器上有未提交的改动：`git status` 查看后 `git stash` 再重跑 |
+| `Cannot fast-forward` | 先看 `git status`：若只有 `M components.d.ts`，是上次构建造成的，`git checkout --` 丢弃即可（见第 4 节）；若有其他改动，确认后再 `git stash` 重跑 |
 | 子模块报 `Failed to fetch` / `not our ref` | 面板 fork 拉不到，或外层记的指针还没推到 fork。按第 1 节顺序重推 |
 | 构建退出码 137 | 内存不足，加 swap 或临时扩内存后重跑 `make build` |
+| 构建报 `[hiddify-admin-v2-translations] Expected ...` | 译文件 JSON 语法错误，构建期就会失败。修文件或回滚（第 6 节），别反复重跑 |
 | `update.sh` 提示 syntax error | 更新过程中脚本自身被替换，重跑一次即可（脚本已用私有副本执行来规避） |
 
 ## 8. 注意
