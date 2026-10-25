@@ -76,16 +76,22 @@ database: keep a backup (`data/backup`) when you work on migrations.
 
 ## Tests
 
-The panel's tests are in `services/panel/tests` (pytest). The panel's venv has no pytest; install it next to it, not into it:
+The panel's tests are in `services/panel/src/tests` (pytest) — i.e. `tests/` at the root of the panel submodule,
+next to `hiddifypanel/`, not one level up in `services/panel/`. The panel's venv has no pytest; install it next to
+it, not into it:
 
 ```bash
 uv pip install --python /opt/hiddify-manager/.venv313/bin/python --target /tmp/pylib pytest
-cd /opt/hiddify-manager/services/panel
+cd /opt/hiddify-manager/services/panel/src
 PYTHONPATH=/tmp/pylib /opt/hiddify-manager/.venv313/bin/python -m pytest tests -p no:cacheprovider -q
 ```
 
 Database tests use their own Redis database (15), never the live one. The admin UI type-checks with
 `node_modules/.bin/vue-tsc --noEmit` in `admin_v2`.
+
+For the full picture — how to run each layer, how to reproduce an end-to-end smoke test (start the panel, run the
+migrations, open the admin UI in a real browser), and the traps that make it look broken when it is not — see
+**[docs/testing.md](docs/testing.md)**.
 
 ## Committing
 

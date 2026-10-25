@@ -75,6 +75,16 @@ git push fork dev-custom                        # 先推子模块
 cd ../.. && git add services/panel/src && git commit   # 后记指针
 ```
 
+### 维护文档索引（`docs/` 下由 fork 维护者添加）
+
+| 文档 | 内容 |
+| --- | --- |
+| [docs/deployment.md](docs/deployment.md) | 首次部署：三种方式、系统要求、端口、装完怎么验证、备份恢复、故障排查 |
+| [docs/server-update.md](docs/server-update.md) | 服务器升级：日常升级、首次转换、构建要求、回滚 |
+| [docs/testing.md](docs/testing.md) | 测试与验证：四层测试怎么跑、端到端冒烟怎么复现、踩过的坑 |
+
+这三份互相引用。改部署 / 升级 / 测试相关的行为时，同步更新对应文档。
+
 ### 其它
 
 - 许可证为 AGPL-3.0；对外提供修改后的网络服务时，分发义务由维护者自行评估，AI 不要主动"合规化"改写头部声明。
