@@ -10,6 +10,38 @@ export HIDDIFY_LOCKS="/run/hiddify/locks"
 export HIDDIFY_PANEL_CFG_PATH="$HIDDIFY_DATA/hiddify-panel/app.cfg"
 export venv_path="/opt/hiddify-manager/.venv313"
 
+# ---------------------------------------------------------------------------------
+# External database: the panel normally uses the locally installed MariaDB and
+# Redis, but it can point at a remote instance instead by defining the
+# connection URIs (docker: docker.env; bare-metal: export in the shell that
+# runs install.sh / updates):
+#
+#     SQLALCHEMY_DATABASE_URI="mysql+mysqldb://user:pass@db-host:3306/hiddifypanel?charset=utf8mb4"
+#     REDIS_URI_MAIN="redis://:pass@redis-host:6379/0"
+#
+# services/panel/run.sh persists both URIs in app.cfg together with a
+# HIDDIFY_EXTERNAL_* marker, so later installs/updates remember "external"
+# even when the env vars are no longer set. Marker names must not start with
+# "SQLALCHEMY_DATABASE_URI" / "REDIS_URI": run.sh deletes the config lines by
+# those prefixes when it rewrites its config.
+# See docs/EXTERNAL_DATABASE.md.
+# ---------------------------------------------------------------------------------
+
+# True when the panel is configured to use an external MySQL/MariaDB server
+# (URI in the environment right now, or persisted by a previous run).
+function is_panel_db_external() {
+    [ -n "${SQLALCHEMY_DATABASE_URI:-}" ] && return 0
+    [ -f "$HIDDIFY_PANEL_CFG_PATH" ] && grep -q '^HIDDIFY_EXTERNAL_DB=True' "$HIDDIFY_PANEL_CFG_PATH" && return 0
+    return 1
+}
+
+# True when the panel is configured to use an external Redis server.
+function is_panel_redis_external() {
+    [ -n "${REDIS_URI_MAIN:-}" ] && return 0
+    [ -f "$HIDDIFY_PANEL_CFG_PATH" ] && grep -q '^HIDDIFY_EXTERNAL_REDIS=True' "$HIDDIFY_PANEL_CFG_PATH" && return 0
+    return 1
+}
+
 # 备份是完整数据库导出（含密钥、用户 ID）：属主为面板用户，且不可被其他人读取。
 # hiddify-panel-cli backup 以 hiddify-panel 身份运行，因此 root 属主的目录
 #（例如面板曾以 root 运行留下）会让每次备份都报 "Permission denied"。

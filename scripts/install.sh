@@ -136,16 +136,29 @@ function main() {
     if [ "$MODE" != "apply_users" ]; then
         clean_files
 
-        # 1) 常用工具、Redis、MySQL（彼此独立）
+        # 1) Common tools, redis and mysql (independent of each other). A service is
+        #    skipped when the panel is configured to use an external server for it:
+        #    SQLALCHEMY_DATABASE_URI / REDIS_URI_MAIN (env), or the HIDDIFY_EXTERNAL_*
+        #    markers run.sh persisted in the panel's app.cfg on a previous run.
         add_task "常用工具与依赖" runsh install.sh scripts/common
         if [ "$DOCKER_MODE" != "true" ]; then
-            add_task "Redis" install_run services/redis
-            add_task "MySQL" install_run services/mysql
+            if is_panel_redis_external; then
+                echo "External Redis configured (REDIS_URI_MAIN): skipping the local Redis install"
+            else
+                add_task "Redis" install_run services/redis
+            fi
+            if is_panel_db_external; then
+                echo "External database configured (SQLALCHEMY_DATABASE_URI): skipping the local MySQL install"
+            else
+                add_task "MySQL" install_run services/mysql
+            fi
         fi
         run_parallel 2 6 "常用工具与依赖"
 
-        [ "$DOCKER_MODE" != "true" ] && install_run services/mysql # 确保 MySQL 正在运行
-        # 面板依赖上面这些（它要生成 reality 密钥对等）
+        if [ "$DOCKER_MODE" != "true" ] && ! is_panel_db_external; then
+            install_run services/mysql # make sure mysql is running
+        fi
+        # The panel needs them all (it generates the reality pair, ...)
         update_progress "${PROGRESS_ACTION}" "Hiddify 面板" 7
         install_run services/panel
     fi
