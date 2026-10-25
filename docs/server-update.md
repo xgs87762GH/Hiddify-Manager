@@ -71,9 +71,26 @@ curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/refs/hea
 bash /tmp/sw.sh
 ```
 
-脚本幂等：已是 checkout 时只做 fetch + 快进 + 子模块 + `make build`。
+脚本幂等：检测到 `/opt/hiddify-manager/.git` 已存在就跳过转换，只做 fetch + 快进 + 子模块 + `make build`。
 
-> 这条路径**不会**跑 `services/panel/backup.sh`。日常升级请用第 3 节的 `scripts/update.sh`。
+### 后续升级还能用它吗
+
+**能跑，但不该日常用。** 它和 `update.sh` 的区别：
+
+| | `switch_to_fork.sh`（已是 checkout 时） | `update.sh` |
+| --- | --- | --- |
+| fetch + `merge --ff-only` | ✓ | ✓ |
+| 子模块更新 | ✓ | ✓ |
+| `make build` | ✓ | ✓ |
+| **跑 `backup.sh` 备份** | **✗** | **✓** |
+| 锁保护（防并发） | ✗ | ✓ |
+| 远程 / 分支可覆盖 | ✗（固定 `origin/dev-custom`） | ✓（`HIDDIFY_GIT_REMOTE` / `HIDDIFY_GIT_BRANCH`） |
+
+> 关键差别是**备份**：`switch_to_fork.sh` 的更新分支不跑 `services/panel/backup.sh`，
+> `update.sh` 会跑。面板启动会自动执行 `_vNNN` 迁移且不可回滚，
+> 没有新鲜备份就升级，出问题只能拿旧备份救。
+
+所以：**首次转换用它，之后日常升级一律用第 3 节的 `scripts/update.sh`。**
 
 ---
 
