@@ -37,7 +37,8 @@
 | 产物 | 来源 | 说明 |
 | --- | --- | --- |
 | 面板源码 | `xgs87762GH/hiddifypanel`（`HIDDIFY_PANEL_REPO`） | `install_panel_from_git` 克隆 → 构建 UI → 安装，**不走官方 PyPI** |
-| 管理端 UI | 上述仓库的 `hiddifypanel/admin_v2` | 在服务器上用 npm 现场构建，产物不入 git |
+| 管理端 UI（预构建） | `xgs87762GH/hiddifypanel` 的 `prebuilt` 分支 | 默认优先；清单在 `scripts/admin-ui-prebuilt.tsv`（带 sha256），按面板 commit 取包 |
+| 管理端 UI（源码，兜底） | 上述仓库的 `hiddifypanel/admin_v2` | 没有对应预构建包时在服务器上 npm 构建（约 1.2 GB 内存），产物不入 git |
 | 用户端 UI（预构建） | `hiddify/hiddify-user-front` 的 `gh-pages` 分支 | 低内存方案，`install_prebuilt.sh` 直接克隆静态产物 |
 | 用户端 UI（源码） | 面板子模块内的 `user_front` | 仅当 `HIDDIFY_USER_FRONT_FROM_SOURCE=1` 时编译 |
 
@@ -85,6 +86,8 @@
 | `HIDDIFY_NODE_VERSION` / `HIDDIFY_NPM_VERSION` | `22.23.3` / `12.1.0` | UI 构建工具链版本 |
 | `HIDDIFY_NODE_MIRRORS` | `nodejs.org/dist` + `npmmirror` | Node 下载镜像，空格分隔 |
 | `HIDDIFY_USER_FRONT_FROM_SOURCE` | 空（用预构建） | 设为 `1` 编译用户端 |
+| `HIDDIFY_ADMIN_UI_PREBUILT` | `1` | 设为 `0` 强制在服务器编译管理端 UI |
+| `HIDDIFY_ADMIN_UI_PREBUILT_REPO` / `_BRANCH` | `xgs87762GH/hiddifypanel` / `prebuilt` | 预构建管理端 UI 的来源 |
 | `HIDDIFY_DISABLE_UPDATE` | 空 | 设为 `1` 彻底禁用更新 |
 | `http_proxy` / `https_proxy` | 空 | curl / git / pip 都读，受限网络必配 |
 
