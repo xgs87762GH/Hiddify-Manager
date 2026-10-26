@@ -19,13 +19,23 @@ apply_users() {
     }
     echo "Reloading services"
     ensure_generated_permissions
+    local pids=() rc=0 pid
     for svc in xray hiddify-core wireguard telegram/telemt; do 
         echo "Reloading $svc"
         run_timed "$svc" bash "$HIDDIFY_SERVICES/$svc/reload.sh" "$1" &
+        pids+=("$!")
     done
     echo "Waiting for services to reload"
-    wait
+    # A bare `wait` returns 0 even when a reload failed: wait on each pid and keep the worst result.
+    for pid in "${pids[@]}"; do
+        wait "$pid" || rc=1
+    done
+    if [ "$rc" -ne 0 ]; then
+        echo "Some services failed to reload; the configs on disk are newer than what they serve" >&2
+        return 1
+    fi
     echo "Services reloaded"
 }
 
-run_logged apply-users apply_users "$1"
+# Same mutex as install/update: two concurrent runs would both rewrite generated/ and restart services.
+with_lock apply-users run_logged apply-users apply_users "$1"

@@ -1,4 +1,6 @@
-#!/opt/hiddify-manager/.venv313/bin/python
+#!/usr/bin/env python3
+# The panel runs this with its own interpreter (hiddifypanel/panel/run_commander.py passes sys.executable):
+# a hardcoded .venv313 path breaks installs whose venv lives in .venv (USE_VENV=310).
 import os
 import subprocess
 import time

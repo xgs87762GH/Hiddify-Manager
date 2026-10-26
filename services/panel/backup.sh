@@ -9,3 +9,5 @@ function main(){
     hiddify-panel-cli backup
 }
 main |& tee -a /opt/hiddify-manager/data/log/backup.log
+# $? would be tee's (always 0): callers must see the backup's own result.
+exit ${PIPESTATUS[0]}

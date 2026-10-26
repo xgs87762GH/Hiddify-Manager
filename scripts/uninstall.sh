@@ -1,5 +1,6 @@
 #!/bin/bash
-cd /opt/hiddify-manager
+# Without the guard a failed cd would make the purge below delete the caller's cwd.
+cd /opt/hiddify-manager || { echo "cannot cd to /opt/hiddify-manager" >&2; exit 1; }
 source /opt/hiddify-manager/scripts/common/utils.sh
 function main(){
     # Every unit (also the template instances and WireGuard): stopped and disabled, so nothing comes back after a reboot
@@ -10,10 +11,11 @@ function main(){
     rm -rf /etc/cron.d/hiddify*
     rm -f /usr/bin/hiddify /etc/bash_completion.d/hiddify /etc/profile.d/hiddify.sh
     service cron reload
-    if [[ "$1" == "purge" ]];then
-        rm -rf services/panel
+    if     [[ "$1" == "purge" ]];then
+        # Absolute paths only: never depend on cwd for a destructive delete.
+        rm -rf /opt/hiddify-manager/services/panel
         apt-get purge -y nginx gunicorn mariadb-* #python3-pip python3
-        rm -rf *
+        rm -rf /opt/hiddify-manager/*
         echo "We have completely removed hiddify panel"
     fi
 }

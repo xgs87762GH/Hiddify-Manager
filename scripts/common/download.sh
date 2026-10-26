@@ -51,8 +51,11 @@ else
     # Otherwise, use the input as a branch name
     base_url="https://raw.githubusercontent.com/hiddify/Hiddify-Manager/refs/heads/main/scripts"
 fi
-curl -sL -o /tmp/hiddify/hiddify_installer.sh $base_url/common/hiddify_installer.sh
-curl -sL -o /tmp/hiddify/utils.sh $base_url/common/utils.sh
+# -f: a 404/502 body must never be installed as the installer, nor sourced as utils.sh.
+curl -fsSL -o /tmp/hiddify/hiddify_installer.sh "$base_url/common/hiddify_installer.sh" || {
+    echo "could not download hiddify_installer.sh from $base_url" >&2; exit 1; }
+curl -fsSL -o /tmp/hiddify/utils.sh "$base_url/common/utils.sh" || {
+    echo "could not download utils.sh from $base_url" >&2; exit 1; }
 chmod 700 /tmp/hiddify/*
 
 /tmp/hiddify/hiddify_installer.sh $@

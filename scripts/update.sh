@@ -21,7 +21,7 @@ function update_from_git() {
 
     echo "Updating $HIDDIFY_DIR from $remote/$branch ..."
     update_progress "Hiddify Updater" "Creating a backup" 10
-    (cd "$HIDDIFY_DIR" && ./services/panel/backup.sh)
+    (cd "$HIDDIFY_DIR" && ./services/panel/backup.sh) || { error "backup failed, refusing to update"; return 1; }
 
     cd "$HIDDIFY_DIR" || return 1
     # the checkout is root-owned but is also touched by other accounts (hiddify-panel, ...)
@@ -116,7 +116,11 @@ function main() {
     rm -rf sniproxy caddy
     update_progress "Hiddify Updater" "Creating a backup" 5
     echo "Creating a backup ..."
-    ./services/panel/backup.sh
+    if ! ./services/panel/backup.sh; then
+        error "backup failed; refusing to update without a fresh backup"
+        remove_lock $NAME
+        return 1
+    fi
 
     case "$package_mode" in
     dev|develop)
@@ -147,7 +151,23 @@ function main() {
         # The running panel stays the old code until install.sh restarts it at the end: install.sh must read the configs
         # and dump them with the CLI (the new code), not through the panel's HTTP API (reload_all_configs, dump_server_configs).
         export HIDDIFY_NO_HTTP_API=true
-        bash <(curl -sSL $update_script) "$package_mode" "$force" "--no-gui" "--no-log"
+        local installer
+        installer="$(mktemp)"
+        # -f: a 404/502 body must never be executed as a script.
+        if ! curl -fsSL "$update_script" -o "$installer"; then
+            error "could not download $update_script"
+            rm -f "$installer"
+            remove_lock $NAME
+            return 1
+        fi
+        bash "$installer" "$package_mode" "$force" "--no-gui" "--no-log"
+        local install_rc=$?
+        rm -f "$installer"
+        if [[ $install_rc -ne 0 ]]; then
+            error "installer failed (exit $install_rc)"
+            remove_lock $NAME
+            return $install_rc
+        fi
     else
         echo "Nothing to update"
     fi
@@ -164,10 +184,11 @@ elif [[ " $@ " == *" --no-gui "* ]]; then
     if [[ " $@ " == *" --no-log "* ]]; then
         set -- "${@/--no-log/}"
         main "$@"
+        error_code=$?
     else
-        main "$@" |& tee $LOG_FILE
+        main "$@" |& tee "$LOG_FILE"
+        error_code=${PIPESTATUS[0]} # main's, not tee's
     fi
-    error_code=$?
     remove_lock $NAME
 else
     show_progress_window --subtitle "Updater" --log $LOG_FILE /opt/hiddify-manager/scripts/update.sh $@ --no-gui --no-log

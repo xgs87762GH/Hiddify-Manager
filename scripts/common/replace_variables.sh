@@ -65,7 +65,8 @@ ensure_generated_permissions
 timing "dump server configs"
 
 # Remaining .j2 templates (run.sh, firewall, ssh, …) — not dump-server-configs output.
-/opt/hiddify-manager/scripts/common/jinja.py $MODE
+# Through the venv's python: the script's shebang is not a reliable interpreter on every install layout.
+python /opt/hiddify-manager/scripts/common/jinja.py $MODE
 jinja_rc=$?
 timing "render .j2 templates"
 printf '[timing] replace_variables total: %d ms\n' $(((${EPOCHREALTIME//[.,]/} - _timing_start) / 1000))

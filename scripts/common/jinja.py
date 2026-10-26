@@ -1,4 +1,6 @@
-#!/opt/hiddify-manager/.venv313/bin/python
+#!/usr/bin/env python3
+# The interpreter is chosen by the caller (replace_variables.sh runs it with the panel's venv python):
+# a hardcoded .venv313 path breaks installs that keep their venv in .venv (USE_VENV=310).
 import base64
 import os
 import sys
@@ -82,6 +84,7 @@ def render(template_path):
     except Exception as e:
         print(f"Error rendering {template_path}: {e}", file=sys.stderr)
         traceback.print_exc(file = sys.stderr)
+        return template_path  # reported to the parent process, which exits non-zero
 
 
 HIDDIFY_DIR = "/opt/hiddify-manager"
@@ -144,17 +147,24 @@ def render_j2_templates(*start_paths):
 
     # Render templates in parallel using ThreadPoolExecutor
     with ProcessPoolExecutor(4) as executor:
-        executor.map(render, templates_to_render)
+        failures = [failed for failed in executor.map(render, templates_to_render) if failed]
     # for t in templates_to_render:
     #     render(t)
+    return failures
 
 start_path = "/opt/hiddify-manager/"
 if __name__ == "__main__":
     if len(sys.argv) > 1 and sys.argv[1] == "apply_users":
-        render_j2_templates(
+        failed = render_j2_templates(
             start_path + "services/hiddify-core/",
             start_path + "services/xray/",
             start_path + "services/wireguard/",
         )
     else:
-        render_j2_templates(start_path)
+        failed = render_j2_templates(start_path)
+    if failed:
+        # A template that did not render leaves its service on the old (or a missing) config: fail the apply.
+        print(f"{len(failed)} template(s) failed to render:", file=sys.stderr)
+        for name in failed:
+            print(f"  {name}", file=sys.stderr)
+        sys.exit(1)

@@ -1197,8 +1197,9 @@ function hiddify-http-api(){
     cat $temp_file
     rm $temp_file
     if [ "$http_status" -ne 200 ];then
-        echo $http_status    
-        return 1$http_status
+        echo "$http_status"
+        # `return 1$http_status` used to be read as 1404 -> 124: callers could not tell the cases apart.
+        return 1
     fi
     return 0
 }
