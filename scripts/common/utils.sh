@@ -541,9 +541,13 @@ function _install_admin_ui_prebuilt() {
     rev=$(_panel_source_rev "$src")
     [ -n "$rev" ] || return 1
     read -r file sum < <(awk -v r="$rev" '$1 == r { print $2, $3; exit }' "$manifest" 2>/dev/null)
-    [ -n "${file:-}" ] && [ -n "${sum:-}" ] || return 1
+    if [ -z "${file:-}" ] || [ -z "${sum:-}" ]; then
+        warning "No prebuilt admin UI for panel ${rev:0:12}; compiling from source (slow on small VPSes)"
+        return 1
+    fi
     tmp=$(mktemp /var/tmp/hiddify-admin-ui-XXXXXX.tar.gz) || return 1
     if ! curl -fsSL --connect-timeout 10 --max-time 600 "${HIDDIFY_ADMIN_UI_PREBUILT_BASE%/}/$file" -o "$tmp"; then
+        warning "Prebuilt admin UI is unreachable ($file); compiling from source instead"
         rm -f "$tmp"
         return 1
     fi

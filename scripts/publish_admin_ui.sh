@@ -2,8 +2,8 @@
 # Publish the admin UI build for the current panel commit.
 #
 # Servers then install it instead of running npm: build_panel_admin_ui looks the
-# commit up in prebuilt-manifest.tsv, downloads the tarball from the `prebuilt`
-# branch and verifies its sha256 before unpacking.
+# commit up in scripts/admin-ui-prebuilt.tsv, downloads the tarball from the
+# `prebuilt` branch and verifies its sha256 before unpacking.
 #
 #   bash scripts/publish_admin_ui.sh [--panel-src DIR] [--no-build] [--no-push]
 #
@@ -67,7 +67,10 @@ else
     git -C "$REPO" remote add origin "$REMOTE"
 fi
 cp "$WORK/$ARTIFACT" "$REPO/$ARTIFACT"
-( cd "$REPO" && ls -t prebuilt-manifest.tsv admin-v2-*.tar.gz 2>/dev/null | grep '\.tar\.gz$' | tail -n +$((KEEP_ARTIFACTS + 1)) | xargs -r rm -f )
+# Trim the oldest artifacts. `ls` exits 2 when nothing matches, which under
+# `set -euo pipefail` would abort the whole publish before it pushes, so the
+# status is deliberately discarded.
+( cd "$REPO" && ls -t admin-v2-*.tar.gz 2>/dev/null | tail -n +$((KEEP_ARTIFACTS + 1)) | xargs -r rm -f ) || true
 git -C "$REPO" add -A
 if git -C "$REPO" diff --cached --quiet; then
     echo "artifact already published; branch left untouched"
