@@ -85,6 +85,18 @@ git push origin dev-custom --tags
 
 **前提**：fork 仓库必须在 `Settings → Actions → General` 里允许 Actions 运行；否则 tag 推上去了也不会出包。
 
+### 发布说明（release 正文）
+
+仓库里的 `.github/release_notes/<tag>.md` 会**覆盖**自动生成的 changelog：
+
+```
+.github/release_notes/v14.1.0b3.md     # 手写说明：改了什么、对比官方
+```
+
+没有这个文件时，正文仍是 `.github/release_message.sh` 生成的内容。
+客户端（`hiddify-app`）另有一个轻量工作流 `release-notes.yml`：即使官方那套需要签名密钥的
+构建流程失败，也会先建出带说明的 Release 条目。
+
 检查结果：仓库 `Releases` 页能看到对应 tag 和 `hiddify-manager.zip`。
 
 ---

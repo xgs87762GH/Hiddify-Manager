@@ -22,6 +22,7 @@
 | **升级已装好的服务器** | [docs/server-update.md](docs/server-update.md) |
 | **查构建/安装脚本依赖哪些外部资源** | [docs/build-requirements.md](docs/build-requirements.md) |
 | **打一个新版本（tag + release 包）** | [docs/release.md](docs/release.md) |
+| **这个版本相对官方改了什么** | [docs/release-notes/v14.1.0b3.md](docs/release-notes/v14.1.0b3.md) |
 | **跑测试、验证面板是否正常** | [docs/testing.md](docs/testing.md) |
 | **改代码（开发环境、目录、提交顺序）** | [DEVELOPMENT.md](DEVELOPMENT.md) |
 | **分支模型与硬性禁令** | [AGENTS.md](AGENTS.md) |
