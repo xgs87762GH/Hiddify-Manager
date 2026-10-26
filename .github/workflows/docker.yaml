@@ -7,24 +7,29 @@ on:
       - 'v*' # Push events to matching v*, i.e. v1.0, v20.15.10
     branches: [ main ]
 env:
-    REGISTRY_IMAGE: ghcr.io/hiddify/hiddify-manager
+    # Published under THIS fork's namespace: the official ghcr.io/hiddify/* package is
+    # owned by hiddify, so pushing there from a fork is denied.
+    REGISTRY_IMAGE: ghcr.io/${{ github.repository_owner }}/hiddify-manager
 jobs:
   make-upload-docker:
-    permissions: write-all
-    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    # The image builds both the user UI and Admin V2 with npm and then runs the installer,
+    # which is far more than the 10 minutes this job used to get.
+    timeout-minutes: 60
 
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
+        # arm64 would need QEMU emulation for the whole npm build; enable it once this is
+        # worth the extra build time.
         platform:
           - linux/amd64
-          - linux/arm64
-        exclude:
-          - platform: ${{ github.ref != 'tag' && 'linux/arm64' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           submodules: recursive
           fetch-depth: 0
@@ -40,7 +45,7 @@ jobs:
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
-          username: ${{ github.repository_owner }}
+          username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       - name: Docker meta
         id: meta
@@ -70,7 +75,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
   merge:
-    permissions: write-all
+    permissions:
+      contents: read
+      packages: write
     runs-on: ubuntu-latest
     needs:
       - make-upload-docker
