@@ -66,43 +66,21 @@ jobs:
       - name: Generate Changelog
         run: .github/release_message.sh > release_message.md
       - name: Use curated notes when present
-        # A hand written .github/release_notes/<tag>.md wins over the generated changelog
+        # A hand written .github/release_notes/<tag>.md wins over the generated changelog.
+        # Fail loudly if it is missing: the changelog script prints nothing, so a missing
+        # file would silently produce a release with an empty body.
         run: |
           notes=".github/release_notes/${GITHUB_REF_NAME}.md"
-          if [ -f "$notes" ]; then cp "$notes" release_message.md; fi
+          if [ -f "$notes" ]; then
+            cp "$notes" release_message.md
+          else
+            echo "::error::curated notes missing: $notes"
+            exit 1
+          fi
       - name: Release
         uses: softprops/action-gh-release@v1
         with:
           files: "*.zip"
           prerelease: ${{ contains(github.ref_name,'b') }}
           body_path: release_message.md
-      - name: Publish the release notes
-        # Neither softprops nor `gh release edit` put the notes in the body, so PATCH the
-        # release through the REST API. If it still fails, upload the diagnostics as a
-        # release asset: a failing job only tells us "it failed", not why.
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NOTES: .github/release_notes/${{ github.ref_name }}.md
-          REPO: ${{ github.repository }}
-          TAG: ${{ github.ref_name }}
-        run: |
-          set -uo pipefail
-          log=notes_debug.log
-          {
-            echo "--- notes file"
-            ls -l "$NOTES"
-            wc -c "$NOTES"
-            echo "--- release before"
-            gh release view "$TAG" --json id,body --jq '[.id, (.body | length)]'
-          } >"$log" 2>&1
-          id=$(gh release view "$TAG" --json id --jq .id)
-          echo "id=$id" >>"$log" 2>&1
-          gh api -X PATCH "repos/$REPO/releases/$id" -F body=@"$NOTES" >>"$log" 2>&1 || echo "patch failed" >>"$log"
-          len=$(gh release view "$TAG" --json body --jq '.body | length')
-          echo "after_len=$len" >>"$log" 2>&1
-          if [ -z "$len" ] || [ "$len" -lt 100 ]; then
-            gh release upload "$TAG" "$log" --clobber >>"$log" 2>&1 || true
-            echo "::error::release body not written (len=$len); see $log in the release assets"
-            exit 1
-          fi
     
