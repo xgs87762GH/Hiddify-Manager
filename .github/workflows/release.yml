@@ -76,13 +76,27 @@ jobs:
           files: "*.zip"
           prerelease: ${{ contains(github.ref_name,'b') }}
           body_path: release_message.md
-      - name: Make sure the release body is the notes
-        # softprops silently leaves the body empty once in a while, so set it explicitly
+      - name: Publish the release notes
+        # softprops leaves the body empty now and then, so write it with gh and fail loudly
+        # if it did not land: the job conclusion is the only diagnostic we get back.
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NOTES: .github/release_notes/${{ github.ref_name }}.md
         run: |
-          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || { echo "no release for $GITHUB_REF_NAME"; exit 0; }
-          if [ -s release_message.md ]; then
-            gh release edit "$GITHUB_REF_NAME" --notes-file release_message.md
+          set -euo pipefail
+          if [ ! -f "$NOTES" ]; then
+            echo "::error::curated notes missing: $NOTES"
+            exit 1
+          fi
+          if gh release view "${{ github.ref_name }}" >/dev/null 2>&1; then
+            gh release edit "${{ github.ref_name }}" --notes-file "$NOTES"
+          else
+            gh release create "${{ github.ref_name }}" --title "${{ github.ref_name }}" --notes-file "$NOTES"
+          fi
+          len=$(gh release view "${{ github.ref_name }}" --json body --jq '.body | length')
+          echo "release body length: $len"
+          if [ "$len" -lt 100 ]; then
+            echo "::error::release body was not written (len=$len)"
+            exit 1
           fi
     
