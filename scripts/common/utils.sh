@@ -145,19 +145,42 @@ function hiddify_random_password() {
     echo
 }
 
+# ALL version queries and downloads go to YOUR fork, never the official org.
+# Override if needed:
+#   export HIDDIFY_GITHUB_USER="yourname"
+#   export HIDDIFY_MANAGER_REPO="yourname/Hiddify-Manager"
+#   export HIDDIFY_PANEL_REPO="yourname/hiddifypanel"
+: "${HIDDIFY_GITHUB_USER:=xgs87762GH}"
+: "${HIDDIFY_MANAGER_REPO:=${HIDDIFY_GITHUB_USER}/Hiddify-Manager}"
+: "${HIDDIFY_PANEL_REPO:=${HIDDIFY_GITHUB_USER}/hiddifypanel}"
+
+# Map the legacy upstream repo names used by the callers (hiddify-panel,
+# Hiddify-Panel, hiddify-manager, ...) to your fork repositories, so every
+# version check and download is served by the fork, not by hiddify/*.
+function fork_repo() {
+    local name
+    name=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    case "$name" in
+        *panel*) echo "$HIDDIFY_PANEL_REPO" ;;
+        *manager*) echo "$HIDDIFY_MANAGER_REPO" ;;
+        *) echo "$HIDDIFY_GITHUB_USER/$1" ;;
+    esac
+}
+
 # The version of a dev install: the date of the newest commit of a branch, as MM-DDTHH:MM (UTC). The branch is dev by
 # default: what dev/develop installs (the panel is cloned from its default branch dev, the manager from refs/heads/dev).
 # GitHub's commits page changes its JSON (the commits moved under .payload.commitsRefRoute), and a path that no longer
 # exists gave "null" and an empty VERSION. So try that page, its Atom feed and the API in turn, and only take a date.
 function get_commit_version() {
-    local repo="$1" branch="${2:-dev}" date="" page
-    page=$(curl -sL -m 20 -H "Accept: application/json" "https://github.com/hiddify/$repo/commits/$branch.atom")
+    local repo="$1" branch="${2:-dev}" date="" page fork
+    fork=$(fork_repo "$repo")
+    page=$(curl -sL -m 20 -H "Accept: application/json" "https://github.com/$fork/commits/$branch.atom")
     date=$(echo "$page" | jq -r '(.payload.commitsRefRoute.commitGroups // .payload.commitGroups // [])[0].commits[0].committedDate // empty' 2>/dev/null)
     if ! [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
-        date=$(curl -sL -m 20 "https://github.com/hiddify/$repo/commits/$branch.atom" | grep -m 1 -o '<updated>[^<]*</updated>' | sed -E 's#</?updated>##g')
+        date=$(curl -sL -m 20 "https://github.com/$fork/commits/$branch.atom" | grep -m 1 -o '<updated>[^<]*</updated>' | sed -E 's#</?updated>##g')
     fi
     if ! [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
-        date=$(curl -sL -m 20 "https://api.github.com/repos/hiddify/$repo/commits/$branch" | jq -r '.commit.committer.date // empty' 2>/dev/null)
+        date=$(curl -sL -m 20 "https://api.github.com/repos/$fork/commits/$branch" | jq -r '.commit.committer.date // empty' 2>/dev/null)
     fi
     if ! [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
         echo "Could not read the latest commit date of $repo ($branch) from GitHub" >&2
@@ -172,17 +195,19 @@ function get_commit_version() {
 
 function get_pre_release_version() {
     # lastversion "$1" --pre --at github
-    VERSION=$(curl -sL "https://api.github.com/repos/hiddify/$1/releases" | jq -r 'map(select(.prerelease == true or .draft == true)) | sort_by(.created_at) | last | .tag_name')
+    VERSION=$(curl -sL "https://api.github.com/repos/$(fork_repo "$1")/releases" | jq -r 'map(select(.prerelease == true or .draft == true)) | sort_by(.created_at) | last | .tag_name')
     VERSION=${VERSION/#v/}
     echo $VERSION
 }
 
 function get_release_version() {
-    VERSION=$(curl -sL "https://api.github.com/repos/hiddify/$1/releases" | jq -r 'map(select(.prerelease == false)) | sort_by(.created_at) | last | .tag_name')
+    local fork
+    fork=$(fork_repo "$1")
+    VERSION=$(curl -sL "https://api.github.com/repos/$fork/releases" | jq -r 'map(select(.prerelease == false)) | sort_by(.created_at) | last | .tag_name')
     if [ -z $VERSION ]; then
-        # COMMIT_URL=https://api.github.com/repos/hiddify/$1/releases/latest
+        # COMMIT_URL=https://api.github.com/repos/$fork/releases/latest
         # VERSION=$(curl -s --connect-timeout 1 $COMMIT_URL | jq -r .tag_name)
-        location=$(curl -sI "https://github.com/hiddify/$1/releases/latest" | grep -i location | awk -F' ' '{print $2}' | tr -d '\r')
+        location=$(curl -sI "https://github.com/$fork/releases/latest" | grep -i location | awk -F' ' '{print $2}' | tr -d '\r')
         if [[ $location == *"latest"* ]]; then
             location=$(curl -sI "$location" | grep -i location | awk -F' ' '{print $2}' | tr -d '\r')
         fi
@@ -383,9 +408,8 @@ function remove_package() {
 # The built UI (hiddifypanel/static/admin-v2/) is not in git. Release/beta wheels
 # ship it prebuilt (release workflow); every install from source builds it here.
 
-# Override to build the admin UI from your own fork:
-#   export HIDDIFY_PANEL_REPO="xgs87762GH/hiddifypanel"
-: "${HIDDIFY_PANEL_REPO:=hiddify/HiddifyPanel}"
+# The panel repo default (your fork) is set near the top of this file:
+#   : "${HIDDIFY_PANEL_REPO:=${HIDDIFY_GITHUB_USER}/hiddifypanel}"
 HIDDIFY_PANEL_GIT_URL="https://github.com/${HIDDIFY_PANEL_REPO}"
 
 function _node_major() {

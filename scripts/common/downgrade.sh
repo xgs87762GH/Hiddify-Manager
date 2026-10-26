@@ -10,8 +10,9 @@ fi
 cd /opt/hiddify-manager
 
 
-pip install hiddifypanel==$(get_release_version hiddify-panel)
-curl -L -s -o hiddify-manager.zip https://github.com/hiddify/hiddify-manager/releases/latest/download/hiddify-manager.zip
+# The panel is reinstalled from YOUR fork (the official PyPI package has no fork versions)
+install_panel_from_git "" pip || true
+curl -L -s -o hiddify-manager.zip https://github.com/${HIDDIFY_MANAGER_REPO:-xgs87762GH/Hiddify-Manager}/releases/latest/download/hiddify-manager.zip
 unzip -o hiddify-manager.zip
 rm hiddify-manager.zip
 ln -s /opt/hiddify-manager /opt/hiddify-config

@@ -8,10 +8,10 @@ NAME="update"
 LOG_FILE="$(log_file $NAME)"
 
 # Which GitHub repo the "download a release" fallback reads its scripts from.
-# A git checkout never uses it (update_from_git below), but set it to your own
-# fork if you also want the fallback to be yours:
+# Defaults to YOUR fork (also defined in utils.sh); a git checkout never uses this
+# fallback at all (update_from_git below). Override if needed:
 #   export HIDDIFY_MANAGER_REPO="xgs87762GH/Hiddify-Manager"
-: "${HIDDIFY_MANAGER_REPO:=hiddify/Hiddify-Manager}"
+: "${HIDDIFY_MANAGER_REPO:=xgs87762GH/Hiddify-Manager}"
 
 # Update a git checkout (a fork you own) in place instead of downloading a release.
 # Override with HIDDIFY_GIT_REMOTE / HIDDIFY_GIT_BRANCH (defaults: origin / current branch).
@@ -122,25 +122,22 @@ function main() {
         return 1
     fi
 
+    # Version checks and the installer script both come from YOUR fork on YOUR branch.
+    : "${HIDDIFY_MANAGER_BRANCH:=dev-custom}"
+    local update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/${HIDDIFY_MANAGER_BRANCH}/scripts/common/download.sh"
     case "$package_mode" in
     dev|develop)
         # Use the latest commit from GitHub
         latest_panel=$(get_commit_version Hiddify-Panel)
         latest_manager=$(get_commit_version hiddify-manager)
-        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/dev/scripts/common/download.sh"
         ;;
     beta)
         latest_panel=$(get_pre_release_version hiddify-panel)
         latest_manager=$(get_pre_release_version hiddify-manager)
-        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/beta/scripts/common/download.sh"
         ;;
     release)
         latest_panel=$(get_release_version hiddify-panel)
         latest_manager=$(get_release_version hiddify-manager)
-        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/main/scripts/common/download.sh"
-        ;;
-    *)
-        update_script="https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/main/scripts/common/download.sh"
         ;;
     esac
 

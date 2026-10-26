@@ -59,6 +59,8 @@ apt-get update
 apt-get install -y curl unzip
 mkdir -p /opt/$GITHUB_REPOSITORY
 cd /opt/$GITHUB_REPOSITORY
+# LEGACY v8 migration path only: the ancient official hiddify-config v10.5.73 package is
+# required to migrate a v8 database. This is NOT an update path — never use it to update.
 curl -L -s -o $GITHUB_REPOSITORY.zip https://github.com/hiddify/$GITHUB_REPOSITORY/releases/download/v10.5.73/$GITHUB_REPOSITORY.zip
 unzip -o $GITHUB_REPOSITORY.zip > /dev/null
 rm "$GITHUB_REPOSITORY.zip"

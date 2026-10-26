@@ -147,9 +147,9 @@ function update_panel() {
             fi
             if [[ $force == "true" || "$current_panel_version" != "$latest" ]]; then
                 update_progress "Updating..." "Hiddify Panel from $current_panel_version to $latest" 10
-                # pip install -U --pre hiddifypanel==$latest
+                # Never install the official PyPI package: the panel comes from YOUR fork
                 disable_panel_services
-                uv pip install -U --pre hiddifypanel
+                install_panel_from_git "" "uv pip" || return 1
                 update_progress "Updated..." "Hiddify Panel to $latest" 50
                 return 0
             fi
@@ -167,9 +167,10 @@ function update_panel() {
             fi
             if [[ $force == "true" || "$current_panel_version" != "$latest" ]]; then
                 update_progress "Updating..." "Hiddify Panel from $current_panel_version to $latest" 10
-                # pip3 install -U hiddifypanel==$latest
+                # Never install the official PyPI package: the panel comes from YOUR fork
                 disable_panel_services
-                uv pip install -U wheel hiddifypanel
+                uv pip install -U wheel
+                install_panel_from_git "" "uv pip" || return 1
                 update_progress "Updated..." "Hiddify Panel to $latest" 50
                 return 0
             fi
@@ -188,7 +189,10 @@ function update_config() {
     local package_mode=$1
     local force=$2
     local current_config_version=$(get_installed_config_version)
-    
+    # All downloads come from YOUR fork (utils.sh provides the HIDDIFY_MANAGER_REPO default);
+    # HIDDIFY_MANAGER_BRANCH is your customized branch, never the upstream-synced main/dev.
+    : "${HIDDIFY_MANAGER_BRANCH:=dev-custom}"
+
     case "$package_mode" in
         docker)
             echo "installing in docker mode"
@@ -198,8 +202,8 @@ function update_config() {
         v*)
             update_progress "Updating..." "Hiddify Config from $current_config_version to $latest" 60
             export HIDDIFY_DISABLE_UPDATE=true
-            #update_from_github "hiddify-manager.tar.gz" "https://github.com/hiddify/Hiddify-Manager/archive/refs/tags/${package_mode}.tar.gz" $latest
-            update_from_github "hiddify-manager.zip" "https://github.com/hiddify/Hiddify-Manager/releases/download/${package_mode}/hiddify-manager.zip" $latest
+            #update_from_github "hiddify-manager.tar.gz" "https://github.com/${HIDDIFY_MANAGER_REPO}/archive/refs/tags/${package_mode}.tar.gz" $latest
+            update_from_github "hiddify-manager.zip" "https://github.com/${HIDDIFY_MANAGER_REPO}/releases/download/${package_mode}/hiddify-manager.zip" $latest
             local update_code=$?
             [[ $update_code == 0 ]] || return $update_code
             update_progress "Updated..." "Hiddify Config to $latest" 100
@@ -212,7 +216,7 @@ function update_config() {
             echo "DEVELOP: Current Config Version=$current_config_version -- Latest=$latest"
             if [[ "$force" == "true" || "$latest" != "$current_config_version" ]]; then
                 update_progress "Updating..." "Hiddify Config from $current_config_version to $latest" 60
-                update_from_github "hiddify-manager.tar.gz" "https://github.com/hiddify/hiddify-manager/archive/refs/heads/dev.tar.gz" $latest
+                update_from_github "hiddify-manager.tar.gz" "https://github.com/${HIDDIFY_MANAGER_REPO}/archive/refs/heads/${HIDDIFY_MANAGER_BRANCH}.tar.gz" $latest
                 local update_code=$?
                 [[ $update_code == 0 ]] || return $update_code
                 update_progress "Updated..." "Hiddify Config to $latest" 100
@@ -224,7 +228,7 @@ function update_config() {
             echo "BETA: Current Config Version=$current_config_version -- Latest=$latest"
             if [[ "$force" == "true" || "$latest" != "$current_config_version" ]]; then
                 update_progress "Updating..." "Hiddify Config from $current_config_version to $latest" 60
-                update_from_github "hiddify-manager.zip" "https://github.com/hiddify/hiddify-manager/releases/download/v$latest/hiddify-manager.zip"
+                update_from_github "hiddify-manager.zip" "https://github.com/${HIDDIFY_MANAGER_REPO}/releases/download/v$latest/hiddify-manager.zip"
                 local update_code=$?
                 [[ $update_code == 0 ]] || return $update_code
                 update_progress "Updated..." "Hiddify Config to $latest" 100
@@ -238,7 +242,7 @@ function update_config() {
             echo "RELEASE: Current Config Version=$current_config_version -- Latest=$latest"
             if [[ "$force" == "true" || "$latest" != "$current_config_version" ]]; then
                 update_progress "Updating..." "Hiddify Config from $current_config_version to $latest" 60
-                update_from_github "hiddify-manager.zip" "https://github.com/hiddify/hiddify-manager/releases/latest/download/hiddify-manager.zip"
+                update_from_github "hiddify-manager.zip" "https://github.com/${HIDDIFY_MANAGER_REPO}/releases/latest/download/hiddify-manager.zip"
                 local update_code=$?
                 [[ $update_code == 0 ]] || return $update_code
                 update_progress "Updated..." "Hiddify Config to $latest" 100
@@ -354,8 +358,8 @@ function update_from_github() {
 }
 
 function custom_version_installer(){
-    #TAGS=$(curl -s "https://api.github.com/repos/hiddify/hiddify-manager/tags?per_page=1000" | jq -r '.[].name')
-    TAGS=$(curl -s "https://pypi.org/pypi/hiddifypanel/json" | jq -r '.releases | keys[]'|sort -V -r)
+    # Only the tags of YOUR fork are offered; the official org and PyPI are never consulted.
+    TAGS=$(curl -s "https://api.github.com/repos/${HIDDIFY_MANAGER_REPO}/tags?per_page=100" | jq -r '.[].name' | sed 's/^v//' | sort -V -r)
     version_gt() {
         [ "$(printf '%s\n' "$@" | sort -V | head -n 1)" != "$1" ]
     }
