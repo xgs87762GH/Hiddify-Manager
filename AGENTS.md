@@ -79,11 +79,15 @@ cd ../.. && git add services/panel/src && git commit   # 后记指针
 
 | 文档 | 内容 |
 | --- | --- |
+| [README.md](README.md) | 中文主入口：fork 说明、文档索引、快速开始、常用命令 |
 | [docs/deployment.md](docs/deployment.md) | 首次部署：三种方式、系统要求、端口、装完怎么验证、备份恢复、故障排查 |
 | [docs/server-update.md](docs/server-update.md) | 服务器升级：日常升级、首次转换、构建要求、回滚 |
+| [docs/build-requirements.md](docs/build-requirements.md) | 构建与安装依赖：GitHub 构建物清单、非 GitHub 源、可覆盖变量、限流与排查 |
+| [docs/release.md](docs/release.md) | 打包发布：版本号规则、发布前检查、打 tag、Actions 产物、校验、回滚 |
 | [docs/testing.md](docs/testing.md) | 测试与验证：四层测试怎么跑、端到端冒烟怎么复现、踩过的坑 |
 
-这三份互相引用。改部署 / 升级 / 测试相关的行为时，同步更新对应文档。
+这些文档互相引用。改部署 / 升级 / 依赖 / 发布 / 测试相关的行为时，同步更新对应文档。
+官方英文 README 归档在 [docs/README_upstream_en.md](docs/README_upstream_en.md)，不再作为入口。
 
 ### 其它
 

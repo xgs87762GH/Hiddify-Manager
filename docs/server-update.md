@@ -96,6 +96,9 @@ bash /tmp/sw.sh
 
 ## 5. 构建要求（失败多半出在这）
 
+完整的外部依赖清单（GitHub 构建物、Node 镜像、可覆盖变量、限流说明）见
+[构建与安装依赖](build-requirements.md)；发新版本见 [打包发布](release.md)。
+
 管理端 UI 产物不在 git 里（`.gitignore` 忽略 `hiddifypanel/static/admin-v2/`），**必须在服务器上构建**：
 
 - Node.js ≥ 18（缺失时脚本自动安装）

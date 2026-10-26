@@ -9,12 +9,13 @@
 
 | 方式 | 什么时候用 | 命令 |
 | --- | --- | --- |
-| **一键安装** | 生产服务器，不改代码 | `bash <(curl https://i.hiddify.com/beta)` |
-| **Git 安装** | 开发机，或要改代码的服务器 | 见第 4 节 |
+| **Git 安装（推荐）** | 生产与开发都用这个，升级只快进本 fork | 见第 3 节 |
+| **官方装过 → 转 fork** | 机器上已经是官方版本 | [升级 §4](server-update.md) 的 `switch_to_fork.sh` |
 | Docker | 要隔离（**仍属实验性**） | 见 [DOCKER.md](DOCKER.md) |
 
-> 生产环境优先一键安装。Docker 支持还没稳定：进程模型仍是 python-systemctl shim，
-> 默认 profile 要 privileged + host network。
+> **不要用官方一键脚本 `bash <(curl https://i.hiddify.com/beta)`**：它装的是官方代码，
+> 后续升级会去拉官方仓库。本 fork 的安装入口只有一个：`git clone` + `scripts/install.sh`。
+> Docker 支持还没稳定：进程模型仍是 python-systemctl shim，默认 profile 要 privileged + host network。
 
 ---
 
@@ -45,12 +46,19 @@ ss -lntp | grep -E ':80 |:443 '     # 有输出说明被占，先停掉 nginx / 
 
 ---
 
-## 3. 一键安装
+## 3. 全新部署（git，fork 分支）
 
 ```bash
 sudo -i
-bash <(curl https://i.hiddify.com/beta)
+git clone --recurse-submodules -b dev-custom \
+    https://github.com/xgs87762GH/Hiddify-Manager.git /opt/hiddify-manager
+cd /opt/hiddify-manager
+bash scripts/install.sh --no-gui
 ```
+
+装的是本 fork 的 `dev-custom` 与面板 fork，之后升级只快进这条分支，不会被官方版本覆盖。
+脚本要从 GitHub 拉核心二进制、面板源码和 Node 工具链，依赖清单见
+[构建与安装依赖](build-requirements.md)。
 
 会装上：HAProxy（入口与路由）、xray / sing-box / hiddify-core（代理核心）、
 MySQL（面板库）、Redis（缓存与 session）、面板本身，
@@ -61,17 +69,19 @@ MySQL（面板库）、Redis（缓存与 session）、面板本身，
 
 ---
 
-## 4. Git 安装（开发机也是服务器）
+## 4. 开发机（也是服务器）
 
-开发机和服务器是**同一份代码树**，没有"本地改完拷贝过去"这一步。
+开发机和服务器是**同一份代码树**，没有"本地改完拷贝过去"这一步。与第 3 节的区别只是用 `make build`（含 UI 构建）。
 
 ```bash
 sudo -i
-git clone --recurse-submodules -b dev https://github.com/hiddify/Hiddify-Manager.git /opt/hiddify-manager
+git clone --recurse-submodules -b dev-custom https://github.com/xgs87762GH/Hiddify-Manager.git /opt/hiddify-manager
 cd /opt/hiddify-manager
 make build
-git -C services/panel/src checkout dev      # 子模块有自己的分支
+git -C services/panel/src checkout dev-custom    # 子模块也有自己的 dev-custom 分支
 ```
+
+分支模型与提交顺序见 [AGENTS.md](../AGENTS.md) 与 [DEVELOPMENT.md](../DEVELOPMENT.md)。
 
 `make build` = 构建管理端 UI + `scripts/install.sh --no-gui`（装全部服务并应用配置）。
 
