@@ -516,6 +516,55 @@ function _remove_build_swap() {
     rm -f "$_HIDDIFY_UI_SWAPFILE"
 }
 
+# Admin UI artifacts are published per commit on a `prebuilt` branch so a 1 GB VPS
+# does not have to run npm. The sha256 lives in this repo (scripts/admin-ui-prebuilt.tsv,
+# updated together with the submodule pointer) rather than in the panel: a commit
+# that changed the panel HEAD would never match the artifact it just published.
+# A missing entry or a bad checksum simply compiles from source.
+HIDDIFY_ADMIN_UI_PREBUILT="${HIDDIFY_ADMIN_UI_PREBUILT:-1}"
+HIDDIFY_ADMIN_UI_PREBUILT_REPO="${HIDDIFY_ADMIN_UI_PREBUILT_REPO:-xgs87762GH/hiddifypanel}"
+HIDDIFY_ADMIN_UI_PREBUILT_BRANCH="${HIDDIFY_ADMIN_UI_PREBUILT_BRANCH:-prebuilt}"
+HIDDIFY_ADMIN_UI_PREBUILT_BASE="${HIDDIFY_ADMIN_UI_PREBUILT_BASE:-https://raw.githubusercontent.com/$HIDDIFY_ADMIN_UI_PREBUILT_REPO/$HIDDIFY_ADMIN_UI_PREBUILT_BRANCH}"
+
+function _panel_source_rev() {
+    git -C "${1%/}" rev-parse HEAD 2>/dev/null || true
+}
+
+# Install the artifact built for this exact commit; non-zero means "compile it".
+function _install_admin_ui_prebuilt() {
+    local src="${1%/}"
+    local manifest="${HIDDIFY_ADMIN_UI_PREBUILT_MANIFEST:-$HIDDIFY_DIR/scripts/admin-ui-prebuilt.tsv}"
+    local static="$src/hiddifypanel/static"
+    local rev file sum tmp
+    [ "$HIDDIFY_ADMIN_UI_PREBUILT" = "1" ] || return 1
+    [ -f "$manifest" ] || return 1
+    rev=$(_panel_source_rev "$src")
+    [ -n "$rev" ] || return 1
+    read -r file sum < <(awk -v r="$rev" '$1 == r { print $2, $3; exit }' "$manifest" 2>/dev/null)
+    [ -n "${file:-}" ] && [ -n "${sum:-}" ] || return 1
+    tmp=$(mktemp /var/tmp/hiddify-admin-ui-XXXXXX.tar.gz) || return 1
+    if ! curl -fsSL --connect-timeout 10 --max-time 600 "${HIDDIFY_ADMIN_UI_PREBUILT_BASE%/}/$file" -o "$tmp"; then
+        rm -f "$tmp"
+        return 1
+    fi
+    if ! { echo "$sum  $tmp" | sha256sum -c - >/dev/null 2>&1; }; then
+        warning "Prebuilt admin UI checksum mismatch; compiling from source instead"
+        rm -f "$tmp"
+        return 1
+    fi
+    rm -rf "$static/admin-v2"
+    mkdir -p "$static"
+    if ! tar -xzf "$tmp" -C "$static" 2>/dev/null; then
+        rm -f "$tmp"
+        return 1
+    fi
+    rm -f "$tmp"
+    [ -f "$static/admin-v2/index.html" ] || return 1
+    # Beats every source file in the freshness check below, so the next run is a no-op.
+    touch "$static/admin-v2/index.html"
+    return 0
+}
+
 # build_panel_admin_ui <panel source dir> [--force]
 # Builds the admin UI into <dir>/hiddifypanel/static/admin-v2/ when it is missing
 # or older than its sources. No-op for trees without the UI source (e.g. a wheel).
@@ -528,6 +577,10 @@ function build_panel_admin_ui() {
     fi
     if [ "$force" != "--force" ] && [ -f "$out" ] &&
         [ -z "$(find "$ui/src" "$ui/index.html" "$ui/package-lock.json" "$ui/vite.config.ts" "$src/hiddifypanel/translations.i18n" -newer "$out" -print -quit 2>/dev/null)" ]; then
+        return 0
+    fi
+    if [ "$force" != "--force" ] && _install_admin_ui_prebuilt "$src"; then
+        success "Admin UI installed from the prebuilt artifact (no npm build needed)"
         return 0
     fi
     update_progress "Building..." "Hiddify Panel admin UI (this can take a few minutes)" 30

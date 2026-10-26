@@ -1,0 +1,6 @@
+# Prebuilt admin UI artifacts, published by scripts/publish_admin_ui.sh.
+# build_panel_admin_ui looks the panel submodule HEAD up here and downloads the
+# artifact from the `prebuilt` branch of the panel repo, verifying this checksum.
+# No entry (or a mismatch) means compile from source, which is always safe.
+# <panel commit>                              <artifact>                      <sha256>
+ae69adc7321b7652294b969927149868fe82f9ab  admin-v2-ae69adc7321b.tar.gz  a0a2e6af65fb7f6a3a32544e62a255b4fd4b0230d017a101477bbddbd1d04b1e
