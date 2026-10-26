@@ -76,4 +76,13 @@ jobs:
           files: "*.zip"
           prerelease: ${{ contains(github.ref_name,'b') }}
           body_path: release_message.md
+      - name: Make sure the release body is the notes
+        # softprops silently leaves the body empty once in a while, so set it explicitly
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 || { echo "no release for $GITHUB_REF_NAME"; exit 0; }
+          if [ -s release_message.md ]; then
+            gh release edit "$GITHUB_REF_NAME" --notes-file release_message.md
+          fi
     
