@@ -48,11 +48,15 @@ bash scripts/update.sh
 
 脚本检测到 git checkout 时走 `update_from_git`，依次：
 
-1. `services/panel/backup.sh` —— 备份面板数据库与配置
-2. `git fetch --prune origin dev-custom`
-3. `git merge --ff-only origin/dev-custom` —— 只快进，绝不覆盖服务器上的本地改动
-4. `git submodule update --init --recursive` —— 把面板拉到 `.gitmodules` 指向的 fork
-5. `make build` —— 重建管理端 UI，然后 `scripts/install.sh --no-gui` 重启面板
+1. `git fetch --prune origin dev-custom`
+2. 若远端 `scripts/update.sh` 比正在跑的这份新，**交接给新版本**重跑（脚本会自我修复，不必手动操作服务器）
+3. `services/panel/backup.sh` —— 备份面板数据库与配置
+4. `git merge --ff-only origin/dev-custom` —— 只快进，绝不覆盖服务器上的本地改动
+5. `git submodule update --init --recursive` —— 把面板拉到 `.gitmodules` 指向的 fork
+6. `make build` —— 重建管理端 UI，然后 `scripts/install.sh --no-gui` 重启面板
+
+> 第 2 步是这一版加的：`update.sh` 从 `/tmp` 的副本里运行，所以它自己的修复要下一次才生效。
+> 现在会先把远端那份取出来替换自己，**面板点一下「更新」就能修好脚本本身**。
 
 可用环境变量覆盖：`HIDDIFY_GIT_REMOTE`（默认 `origin`）、`HIDDIFY_GIT_BRANCH`（默认当前分支）。
 
@@ -206,6 +210,8 @@ make build
 | 构建退出码 137 | 内存不足，加 swap 或临时扩内存后重跑 `make build` |
 | 构建报 `[hiddify-admin-v2-translations] Expected ...` | 译文件 JSON 语法错误。修文件或回滚，**别反复重跑**（坑 1） |
 | `update.sh` 提示 syntax error | 更新过程中脚本自身被替换，重跑一次即可 |
+| `fatal: detected dubious ownership in repository at '.../services/panel/src'` | 子模块是独立仓库，root 跑 git 需要 `safe.directory` 例外。脚本现在会自动把主目录与各级子模块加进去并重试一次；**若旧版脚本还在线上，先点一次「更新」让它自我切换到新版**，再点第二次即可。手动兜底：`git config --global --add safe.directory <目录>`
+| `git submodule update failed` / `Unable to find current revision in submodule path` | 同上（ownership）；除此之外检查面板 fork 是否真的推了该提交（第 2 节） |
 
 ---
 
