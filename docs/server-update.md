@@ -60,6 +60,24 @@ bash scripts/update.sh
 
 可用环境变量覆盖：`HIDDIFY_GIT_REMOTE`（默认 `origin`）、`HIDDIFY_GIT_BRANCH`（默认当前分支）。
 
+### 改完更新脚本先自测
+
+```bash
+bash scripts/tests/smoke_update.sh      # 默认跑 10 轮
+bash scripts/tests/smoke_update.sh 3    # 或指定轮数
+```
+
+纯离线（仓库/clone 都建在临时目录），每轮重放四个场景：
+
+| 场景 | 覆盖的情况 |
+| --- | --- |
+| A | 全新更新，没有任何 `safe.directory` 例外，且面板子模块属于别的用户 |
+| B | 外层已经 up to date，但面板落后 → 必须仍然补同步 |
+| C | 只有面板指针变化的一次提交 |
+| D | 服务器上的 `update.sh` 还是修好之前的版本：第一次运行只能更新代码，**第二次跑完** |
+
+每轮都会断言「HEAD 在 `origin/dev-custom` 上」和「面板 checkout 等于指针指向的提交」。改 `update.sh` / `switch_to_fork.sh` / `common/utils.sh` 之后必须全绿。
+
 ---
 
 ## 4. 官方安装 ↔ fork：两条命令
@@ -210,7 +228,7 @@ make build
 | 构建退出码 137 | 内存不足，加 swap 或临时扩内存后重跑 `make build` |
 | 构建报 `[hiddify-admin-v2-translations] Expected ...` | 译文件 JSON 语法错误。修文件或回滚，**别反复重跑**（坑 1） |
 | `update.sh` 提示 syntax error | 更新过程中脚本自身被替换，重跑一次即可 |
-| `fatal: detected dubious ownership in repository at '.../services/panel/src'` | 子模块是独立仓库，root 跑 git 需要 `safe.directory` 例外。脚本现在会自动把主目录与各级子模块加进去并重试一次；**若旧版脚本还在线上，先点一次「更新」让它自我切换到新版**，再点第二次即可。手动兜底：`git config --global --add safe.directory <目录>`
+| `fatal: detected dubious ownership in repository at '.../services/panel/src'` | 子模块是独立仓库，root 跑 git 需要 `safe.directory` 例外。现版本会自动把主目录与各级子模块加进去并重试一次。**若线上跑的还是修好之前的脚本，第一次点击只会把代码（含脚本本身）更新过来，并可能在这一步报错——直接再点一次「更新」就会跑完**，不需要手动改服务器。手动兜底：`git config --global --add safe.directory <目录>`
 | `git submodule update failed` / `Unable to find current revision in submodule path` | 同上（ownership）；除此之外检查面板 fork 是否真的推了该提交（第 2 节） |
 
 ---

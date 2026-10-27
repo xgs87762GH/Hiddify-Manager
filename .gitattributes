@@ -1,0 +1,16 @@
+# Line endings: everything is LF in git.
+#
+# The scripts are executed by bash on the server, and bash treats a CRLF file as
+# a syntax error ("unexpected token `{'\r''"). Windows checkouts used to write
+# them as CRLF, which is how a whole checkout ended up looking modified and why
+# generated commits could silently carry CRLF.
+* text=auto eol=lf
+
+# Binary/GUI assets that must never be converted.
+*.png binary
+*.ico binary
+*.pfx binary
+*.ttf binary
+*.woff binary
+*.woff2 binary
+*.pdf binary

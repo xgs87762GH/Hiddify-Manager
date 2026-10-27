@@ -8,6 +8,8 @@ generated/**
 scripts/common/packages.db
 docker-compose.override.yaml
 tests
+# ...but the shell smoke tests are part of the repo and run in CI.
+!scripts/tests/
 dump.rdb
 hiddify_usages.json
 docker-data
