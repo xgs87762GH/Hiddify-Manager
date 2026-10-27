@@ -153,6 +153,9 @@ function hiddify_random_password() {
 : "${HIDDIFY_GITHUB_USER:=xgs87762GH}"
 : "${HIDDIFY_MANAGER_REPO:=${HIDDIFY_GITHUB_USER}/Hiddify-Manager}"
 : "${HIDDIFY_PANEL_REPO:=${HIDDIFY_GITHUB_USER}/hiddifypanel}"
+# Customized branches for develop installs / commit-date probes (never upstream-synced main/dev).
+: "${HIDDIFY_MANAGER_BRANCH:=dev-custom}"
+: "${HIDDIFY_PANEL_BRANCH:=dev-custom}"
 
 # Map the legacy upstream repo names used by the callers (hiddify-panel,
 # Hiddify-Panel, hiddify-manager, ...) to your fork repositories, so every
@@ -167,12 +170,22 @@ function fork_repo() {
     esac
 }
 
-# The version of a dev install: the date of the newest commit of a branch, as MM-DDTHH:MM (UTC). The branch is dev by
-# default: what dev/develop installs (the panel is cloned from its default branch dev, the manager from refs/heads/dev).
+# Default develop branch for a repo name (panel vs manager).
+function fork_dev_branch() {
+    local name
+    name=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    case "$name" in
+        *panel*) echo "$HIDDIFY_PANEL_BRANCH" ;;
+        *) echo "$HIDDIFY_MANAGER_BRANCH" ;;
+    esac
+}
+
+# The version of a dev install: the date of the newest commit of a branch, as MM-DDTHH:MM (UTC).
+# Defaults to YOUR customized branch (HIDDIFY_*_BRANCH), not upstream-synced `dev`.
 # GitHub's commits page changes its JSON (the commits moved under .payload.commitsRefRoute), and a path that no longer
 # exists gave "null" and an empty VERSION. So try that page, its Atom feed and the API in turn, and only take a date.
 function get_commit_version() {
-    local repo="$1" branch="${2:-dev}" date="" page fork
+    local repo="$1" branch="${2:-$(fork_dev_branch "$1")}" date="" page fork
     fork=$(fork_repo "$repo")
     page=$(curl -sL -m 20 -H "Accept: application/json" "https://github.com/$fork/commits/$branch.atom")
     date=$(echo "$page" | jq -r '(.payload.commitsRefRoute.commitGroups // .payload.commitGroups // [])[0].commits[0].committedDate // empty' 2>/dev/null)

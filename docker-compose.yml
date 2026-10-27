@@ -1,10 +1,10 @@
 
 services:
   hiddifymanager:
-    build: . 
-    #image: ghcr.io/xgs87762gh/hiddify-manager:latest #latest
-    #image: ghcr.io/xgs87762gh/hiddify-manager:beta   #prerelease
-    #image: ghcr.io/xgs87762gh/hiddify-manager:v14.1.0b3 #specific version
+    # Published install (docker-installer.sh): pulls this image. Local/dev builds
+    # that need `build: .` should use an override file or comment the image line.
+    image: ghcr.io/xgs87762gh/hiddify-manager:latest
+    #build: .
 
     restart: always
     privileged: true

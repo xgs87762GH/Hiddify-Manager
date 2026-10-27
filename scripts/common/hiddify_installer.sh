@@ -113,7 +113,8 @@ function update_panel() {
             return 0
         ;;
         develop|dev)
-            # Use the latest commit from GitHub
+            # Use the latest commit from YOUR customized panel branch
+            : "${HIDDIFY_PANEL_BRANCH:=dev-custom}"
             latest=$(get_commit_version Hiddify-Panel)
             activate_python_venv
             echo "DEVELOP: hiddify panel version current=$current_panel_version latest=$latest"
@@ -125,7 +126,7 @@ function update_panel() {
                 
                 disable_panel_services
                 
-                install_panel_from_git "" "uv pip" || return 1
+                install_panel_from_git "$HIDDIFY_PANEL_BRANCH" "uv pip" || return 1
                 panel_path=$(hiddifypanel_path)
                 if [ -n "$latest" ]; then
                     echo "setting $latest in $panel_path/VERSION"
@@ -148,8 +149,9 @@ function update_panel() {
             if [[ $force == "true" || "$current_panel_version" != "$latest" ]]; then
                 update_progress "Updating..." "Hiddify Panel from $current_panel_version to $latest" 10
                 # Never install the official PyPI package: the panel comes from YOUR fork
+                # Clone the pre-release tag (get_* strips the leading v; git needs it back).
                 disable_panel_services
-                install_panel_from_git "" "uv pip" || return 1
+                install_panel_from_git "v${latest#v}" "uv pip" || return 1
                 update_progress "Updated..." "Hiddify Panel to $latest" 50
                 return 0
             fi
@@ -170,7 +172,7 @@ function update_panel() {
                 # Never install the official PyPI package: the panel comes from YOUR fork
                 disable_panel_services
                 uv pip install -U wheel
-                install_panel_from_git "" "uv pip" || return 1
+                install_panel_from_git "v${latest#v}" "uv pip" || return 1
                 update_progress "Updated..." "Hiddify Panel to $latest" 50
                 return 0
             fi
