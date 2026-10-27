@@ -21,8 +21,8 @@
 - **Full Persian support**: RTL layout, dark mode and a mobile-friendly layout.
 - **Security fixes**: node authentication, admin permissions, and no shell commands from templates.
 - **Supported systems**: Ubuntu 22.04, 24.04 and 26.04, and Docker (**experimental** — see [docs/DOCKER.md](DOCKER.md)).
-- Docker (beta image): `bash <(curl -fsSL https://raw.githubusercontent.com/hiddify/Hiddify-Manager/main/scripts/common/docker-installer.sh) beta`
-- Direct installation: `bash <(curl https://i.hiddify.com/beta)`
+- Docker（本 fork 的 beta 镜像）：`bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/common/docker-installer.sh) beta`
+- Direct installation（本 fork）：`git clone --recurse-submodules -b dev-custom https://github.com/xgs87762GH/Hiddify-Manager.git /opt/hiddify-manager && cd /opt/hiddify-manager && bash scripts/install.sh --no-gui`，见 [deployment.md](deployment.md)
 
 
 > ⚠️ **Before upgrading**: take a full backup, and see [section 2](#2-breaking-changes--upgrade-notes-read-before-upgrading).
