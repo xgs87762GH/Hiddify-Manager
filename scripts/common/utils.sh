@@ -157,6 +157,30 @@ function hiddify_random_password() {
 : "${HIDDIFY_MANAGER_BRANCH:=dev-custom}"
 : "${HIDDIFY_PANEL_BRANCH:=dev-custom}"
 
+# git refuses to touch a repository owned by another user ("dubious ownership"),
+# and the exception is per repository directory, never recursive: the manager
+# checkout is written by root and by hiddify-panel, and the panel submodule (and
+# what it nests) is its own repository and needs its own exception. Call this
+# before any git command that may reach a submodule, or the update stops with
+# "Unable to find current revision in submodule path".
+function add_safe_directory() {
+    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$1" ||
+        git config --global --add safe.directory "$1" >/dev/null 2>&1
+}
+
+function add_safe_directories() {
+    local d
+    add_safe_directory "$HIDDIFY_DIR"
+    {
+        # declared submodules, readable before any of them is initialized
+        git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
+        # nested ones, only visible once their parent is checked out
+        git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+    } | while read -r d; do
+        [ -n "$d" ] && add_safe_directory "$HIDDIFY_DIR/$d"
+    done
+}
+
 # Map the legacy upstream repo names used by the callers (hiddify-panel,
 # Hiddify-Panel, hiddify-manager, ...) to your fork repositories, so every
 # version check and download is served by the fork, not by hiddify/*.

@@ -44,15 +44,41 @@ log()  { echo -e "\033[1;34m==>\033[0m $*"; }
 warn() { echo -e "\033[1;33mwarning:\033[0m $*" >&2; }
 die()  { echo -e "\033[1;31merror:\033[0m $*" >&2; exit 1; }
 
+# This script is downloaded standalone (curl … | bash), so it cannot source
+# scripts/common/utils.sh: it carries the same helpers update.sh uses. git
+# refuses a repository owned by another user ("dubious ownership"), and the
+# exception is per directory, never recursive: $ROOT is written by root and by
+# hiddify-panel, and every submodule below it needs its own exception, or the
+# update dies with "Unable to find current revision in submodule path".
+function add_safe_directory() {
+    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$1" ||
+        git config --global --add safe.directory "$1" >/dev/null 2>&1
+}
+
+function add_safe_directories() {
+    local d
+    add_safe_directory "$ROOT"
+    {
+        git -C "$ROOT" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
+        git -C "$ROOT" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+    } | while read -r d; do
+        [ -n "$d" ] && add_safe_directory "$ROOT/$d"
+    done
+}
+
 # --- already a git checkout: just update from git -------------------------------
 update_from_git() {
     cd "$ROOT" || die "cannot enter $ROOT"
-    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$ROOT" ||
-        git config --global --add safe.directory "$ROOT" >/dev/null 2>&1
+    add_safe_directories
     log "fetching $BRANCH"
     git fetch --prune origin "$BRANCH" || die "git fetch failed"
     git merge --ff-only "origin/$BRANCH" || die "cannot fast-forward, resolve by hand: cd $ROOT && git status"
-    git submodule update --init --recursive || warn "submodule update failed"
+    add_safe_directories
+    git submodule update --init --recursive || {
+        # a submodule cloned above is a repository of its own: add it and retry
+        add_safe_directories
+        git submodule update --init --recursive || warn "submodule update failed"
+    }
     log "applying"
     make build
     return $?
@@ -89,8 +115,7 @@ switch_to_fork() {
     git init -b "$BRANCH" >/dev/null 2>&1 || git init >/dev/null
     git remote add origin "$FORK_URL" 2>/dev/null || git remote set-url origin "$FORK_URL"
     git remote add upstream "$UPSTREAM_URL" 2>/dev/null || true
-    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$ROOT" ||
-        git config --global --add safe.directory "$ROOT" >/dev/null 2>&1
+    add_safe_directories
 
     log "fetching $BRANCH from your fork"
     git fetch --prune origin "$BRANCH" || die "could not fetch $FORK_URL ($BRANCH)"
@@ -120,7 +145,12 @@ switch_to_fork() {
     fi
 
     log "submodules"
-    git submodule update --init --recursive || die "submodule update failed"
+    add_safe_directories
+    git submodule update --init --recursive || {
+        # a submodule cloned above is a repository of its own: add it and retry
+        add_safe_directories
+        git submodule update --init --recursive || die "submodule update failed"
+    }
 
     log "what differs from the official $BASE:"
     git --no-pager diff --stat "upstream/$BASE...HEAD" 2>/dev/null ||

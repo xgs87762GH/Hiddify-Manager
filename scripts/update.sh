@@ -18,25 +18,31 @@ LOG_FILE="$(log_file $NAME)"
 # root-owned but is also touched by hiddify-panel, and every submodule below it
 # is the same. Without its own exception the panel submodule fails with
 # "Unable to find current revision in submodule path".
-function add_safe_directory() {
-    local dir="$1"
-    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" ||
-        git config --global --add safe.directory "$dir" >/dev/null 2>&1
-}
+# These normally come from common/utils.sh, which this script sources above.
+# It can, however, be newer than the utils.sh next to it (that is exactly when
+# the hand-over below fires), and that is also when it needs them, so it carries
+# its own copy for an utils.sh that predates them.
+if ! declare -F add_safe_directories >/dev/null; then
+    function add_safe_directory() {
+        local dir="$1"
+        git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" ||
+            git config --global --add safe.directory "$dir" >/dev/null 2>&1
+    }
 
-function add_safe_directories() {
-    local d
-    add_safe_directory "$HIDDIFY_DIR"
-    {
-        # declared submodules, read before any of them is initialized
-        git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
-        # nested ones, only visible once their parent is checked out
-        git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
-    } | while read -r d; do
-        [[ -n "$d" ]] || continue
-        add_safe_directory "$HIDDIFY_DIR/$d"
-    done
-}
+    function add_safe_directories() {
+        local d
+        add_safe_directory "$HIDDIFY_DIR"
+        {
+            # declared submodules, read before any of them is initialized
+            git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
+            # nested ones, only visible once their parent is checked out
+            git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+        } | while read -r d; do
+            [[ -n "$d" ]] || continue
+            add_safe_directory "$HIDDIFY_DIR/$d"
+        done
+    }
+fi
 
 # This script runs from a copy in /tmp (see the re-exec below), so an update by
 # itself cannot change the code that is doing the work: the fixes shipped in the
