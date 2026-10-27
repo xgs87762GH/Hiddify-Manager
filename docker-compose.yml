@@ -2,10 +2,9 @@
 services:
   hiddifymanager:
     build: . 
-    #image: ghcr.io/hiddify/hiddify-manager:latest #latest 
-    #image: ghcr.io/hiddify/hiddify-manager:beta 
-    #image: ghcr.io/hiddify/hiddify-manager:dev
-    #image: ghcr.io/hiddify/hiddify-manager:v13.0.0 #specific version
+    #image: ghcr.io/xgs87762gh/hiddify-manager:latest #latest
+    #image: ghcr.io/xgs87762gh/hiddify-manager:beta   #prerelease
+    #image: ghcr.io/xgs87762gh/hiddify-manager:v14.1.0b3 #specific version
 
     restart: always
     privileged: true

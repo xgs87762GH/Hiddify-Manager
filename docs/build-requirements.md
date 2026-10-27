@@ -69,7 +69,7 @@
 | Python 依赖 | PyPI（`uv pip`） | venv 为 3.13 |
 | 系统包 | Ubuntu 官方 apt 源 | 见 `scripts/install.sh` |
 | HAProxy | `pks.haproxy.com` apt 源 | 安装 HAProxy |
-| Docker 镜像 | Docker Hub（mariadb/redis）+ `ghcr.io/hiddify/hiddify-manager` | 仅 Docker 模式 |
+| Docker 镜像 | Docker Hub（mariadb/redis）+ `ghcr.io/xgs87762gh/hiddify-manager`（本 fork 发布） | 仅 Docker 模式 |
 | GeoIP / 证书 | Let's Encrypt / ZeroSSL | 运行时，非构建 |
 
 ---

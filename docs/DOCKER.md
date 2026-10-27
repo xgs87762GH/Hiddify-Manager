@@ -1,19 +1,22 @@
 # Docker install (experimental)
 
-Docker support in Hiddify Manager is **experimental**. Prefer a bare-metal install (`bash <(curl https://i.hiddify.com/beta)`) for production until the items below are closed.
+Docker support in Hiddify Manager is **experimental**. Prefer a bare-metal install
+(见 [部署文档](deployment.md)) for production until the items below are closed.
 
 ## Quick start (published image)
 
 ```bash
-bash <(curl -fsSL https://raw.githubusercontent.com/hiddify/Hiddify-Manager/main/scripts/common/docker-installer.sh) beta
+bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/common/docker-installer.sh) beta
 ```
 
-Legacy redirects that still fetch `common/docker-installer.sh` are shimmed to the script above.
+> 不要用官方那条 `hiddify/Hiddify-Manager/main/...`：它拉的是官方脚本和官方镜像。
+> 本 fork 镜像由 `docker.yaml` 发布到 `ghcr.io/xgs87762gh/hiddify-manager`，
+> tag 为版本号（如 `v14.1.0b3`），预发布版本额外打 `beta`。
 
 The installer:
 
-1. Downloads `docker-compose.yml` + `docker.env` (no local Dockerfile required).
-2. Activates `image: ghcr.io/hiddify/hiddify-manager:<tag>` and disables `build: .`.
+1. Downloads `docker-compose.yml` + `docker.env` from this fork (no local Dockerfile required).
+2. Uses `image: ghcr.io/xgs87762gh/hiddify-manager:<tag>` instead of `build: .`.
 3. Randomizes `MYSQL_PASSWORD` / `REDIS_PASSWORD` and **rewrites** `SQLALCHEMY_DATABASE_URI` / `REDIS_URI_MAIN` to match.
 
 ## Dedicated server vs co-existence
