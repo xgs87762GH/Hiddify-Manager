@@ -13,6 +13,31 @@ LOG_FILE="$(log_file $NAME)"
 #   export HIDDIFY_MANAGER_REPO="xgs87762GH/Hiddify-Manager"
 : "${HIDDIFY_MANAGER_REPO:=xgs87762GH/Hiddify-Manager}"
 
+# git refuses a repository owned by another user ("dubious ownership"), and the
+# exception is per repository directory, never recursive: the checkout is
+# root-owned but is also touched by hiddify-panel, and every submodule below it
+# is the same. Without its own exception the panel submodule fails with
+# "Unable to find current revision in submodule path".
+function add_safe_directory() {
+    local dir="$1"
+    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" ||
+        git config --global --add safe.directory "$dir" >/dev/null 2>&1
+}
+
+function add_safe_directories() {
+    local d
+    add_safe_directory "$HIDDIFY_DIR"
+    {
+        # declared submodules, read before any of them is initialized
+        git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
+        # nested ones, only visible once their parent is checked out
+        git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+    } | while read -r d; do
+        [[ -n "$d" ]] || continue
+        add_safe_directory "$HIDDIFY_DIR/$d"
+    done
+}
+
 # Update a git checkout (a fork you own) in place instead of downloading a release.
 # Override with HIDDIFY_GIT_REMOTE / HIDDIFY_GIT_BRANCH (defaults: origin / current branch).
 function update_from_git() {
@@ -21,13 +46,10 @@ function update_from_git() {
 
     echo "Updating $HIDDIFY_DIR from $remote/$branch ..."
     update_progress "Hiddify Updater" "Creating a backup" 10
+    add_safe_directories
     (cd "$HIDDIFY_DIR" && ./services/panel/backup.sh) || { error "backup failed, refusing to update"; return 1; }
 
     cd "$HIDDIFY_DIR" || return 1
-    # the checkout is root-owned but is also touched by other accounts (hiddify-panel, ...)
-    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$HIDDIFY_DIR" ||
-        git config --global --add safe.directory "$HIDDIFY_DIR" >/dev/null 2>&1
-
     update_progress "Hiddify Updater" "Fetching $remote/$branch" 25
     git fetch --prune "$remote" "$branch" || { error "git fetch $remote/$branch failed"; return 1; }
 
@@ -49,7 +71,13 @@ function update_from_git() {
             return 1
         }
         update_progress "Hiddify Updater" "Syncing submodules" 45
-        git submodule update --init --recursive || { error "git submodule update failed"; return 1; }
+        add_safe_directories
+        git submodule update --init --recursive || {
+            # A submodule cloned by that call is a repository of its own and
+            # gets the same ownership check: add it and try once more.
+            add_safe_directories
+            git submodule update --init --recursive || { error "git submodule update failed"; return 1; }
+        }
     fi
 
     update_progress "Hiddify Updater" "Applying the new code" 60
