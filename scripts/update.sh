@@ -38,6 +38,25 @@ function add_safe_directories() {
     done
 }
 
+# This script runs from a copy in /tmp (see the re-exec below), so an update by
+# itself cannot change the code that is doing the work: the fixes shipped in the
+# new commit would only reach the next run. Take the branch's version instead
+# and hand over to it, so this script can repair itself with nothing but the
+# panel's "update" button.
+function hand_over_to_new_script() {
+    local ref="$1"
+    shift
+    local script
+    script=$(mktemp /tmp/hiddify-update-new.XXXXXX) || return 1
+    if git -C "$HIDDIFY_DIR" show "$ref:scripts/update.sh" >"$script" 2>/dev/null &&
+        [[ -s "$script" ]] && bash -n "$script" 2>/dev/null &&
+        ! cmp -s "$script" "$0" && ! cmp -s "$script" "${_upd_tmp:-$script}"; then
+        echo "scripts/update.sh changed on $ref, continuing with that version"
+        exec bash "$script" "$@"
+    fi
+    rm -f "$script"
+}
+
 # Update a git checkout (a fork you own) in place instead of downloading a release.
 # Override with HIDDIFY_GIT_REMOTE / HIDDIFY_GIT_BRANCH (defaults: origin / current branch).
 function update_from_git() {
@@ -45,9 +64,7 @@ function update_from_git() {
     local branch="${HIDDIFY_GIT_BRANCH:-$(git -C "$HIDDIFY_DIR" rev-parse --abbrev-ref HEAD)}"
 
     echo "Updating $HIDDIFY_DIR from $remote/$branch ..."
-    update_progress "Hiddify Updater" "Creating a backup" 10
     add_safe_directories
-    (cd "$HIDDIFY_DIR" && ./services/panel/backup.sh) || { error "backup failed, refusing to update"; return 1; }
 
     cd "$HIDDIFY_DIR" || return 1
     update_progress "Hiddify Updater" "Fetching $remote/$branch" 25
@@ -61,6 +78,12 @@ function update_from_git() {
         return 1
     fi
 
+    # Run the newest update.sh from the branch, not the one we started with.
+    hand_over_to_new_script "$remote/$branch" --no-gui "$@"
+
+    update_progress "Hiddify Updater" "Creating a backup" 10
+    (cd "$HIDDIFY_DIR" && ./services/panel/backup.sh) || { error "backup failed, refusing to update"; return 1; }
+    cd "$HIDDIFY_DIR" || return 1
     if [[ "$local_head" == "$remote_head" ]]; then
         echo "Already up to date ($local_head)"
     else
@@ -70,16 +93,6 @@ function update_from_git() {
             error "Resolve it by hand: cd $HIDDIFY_DIR && git status"
             return 1
         }
-
-        # The fast-forward can change this very script (for instance a fix to
-        # this flow): run the new copy so its changes apply to this update and
-        # not only to the next one. It copies itself and then compares equal,
-        # so this hands over once.
-        if [[ -n "${_upd_tmp:-}" && -f "$HIDDIFY_DIR/scripts/update.sh" ]] &&
-           ! cmp -s "$_upd_tmp" "$HIDDIFY_DIR/scripts/update.sh"; then
-            echo "update.sh changed while updating, continuing with the new version"
-            exec bash "$HIDDIFY_DIR/scripts/update.sh" --no-gui "$@"
-        fi
     fi
 
     # Syncing is not part of the branch above: a run that stopped after the
