@@ -14,6 +14,7 @@ Hiddify-Manager 是支持多用户的面板，面向**网络审查环境**优化
 | --- | --- |
 | 部署一台新服务器 | [deployment.md](deployment.md) |
 | 升级已装的服务器 | [server-update.md](server-update.md) |
+| 本机 SSH 不通时用面板 Session 跳板 | [panel-ssh-via-session.md](panel-ssh-via-session.md) |
 | 查构建依赖（GitHub 构建物等） | [build-requirements.md](build-requirements.md) |
 | 打版本 / 出 release 包 | [release.md](release.md) |
 | 跑测试与验证 | [testing.md](testing.md) |

@@ -102,8 +102,23 @@ fi
 update-locale LANG=C.UTF-8 >/dev/null 2>&1 || true
 
 # Overwrite (do not append) so repeated installs do not duplicate the sudoers line.
-echo "hiddify-panel ALL=(root) NOPASSWD: /opt/hiddify-manager/scripts/common/commander.py" >/etc/sudoers.d/hiddify
+# Panel run_commander.py invokes: sudo <venv>/bin/python .../commander.py <args>
+# (not the shebang alone). Allow both forms so Apply is not stuck on "command not allowed".
+_commander=/opt/hiddify-manager/scripts/common/commander.py
+_panel_py=/opt/hiddify-manager/.venv313/bin/python
+if [ ! -x "$_panel_py" ]; then
+  if [ -x /opt/hiddify-manager/.venv/bin/python ]; then
+    _panel_py=/opt/hiddify-manager/.venv/bin/python
+  elif [ -x /opt/hiddify-manager/.venv310/bin/python ]; then
+    _panel_py=/opt/hiddify-manager/.venv310/bin/python
+  fi
+fi
+{
+  echo "hiddify-panel ALL=(root) NOPASSWD: ${_commander}"
+  echo "hiddify-panel ALL=(root) NOPASSWD: ${_panel_py} ${_commander} *"
+} >/etc/sudoers.d/hiddify
 chmod 440 /etc/sudoers.d/hiddify
+unset _commander _panel_py
 
 chmod +x /opt/hiddify-manager/scripts/hiddify
 ln -sf /opt/hiddify-manager/scripts/hiddify /usr/bin/hiddify
