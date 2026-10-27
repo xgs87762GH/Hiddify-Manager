@@ -70,15 +70,29 @@ function update_from_git() {
             error "Resolve it by hand: cd $HIDDIFY_DIR && git status"
             return 1
         }
-        update_progress "Hiddify Updater" "Syncing submodules" 45
-        add_safe_directories
-        git submodule update --init --recursive || {
-            # A submodule cloned by that call is a repository of its own and
-            # gets the same ownership check: add it and try once more.
-            add_safe_directories
-            git submodule update --init --recursive || { error "git submodule update failed"; return 1; }
-        }
+
+        # The fast-forward can change this very script (for instance a fix to
+        # this flow): run the new copy so its changes apply to this update and
+        # not only to the next one. It copies itself and then compares equal,
+        # so this hands over once.
+        if [[ -n "${_upd_tmp:-}" && -f "$HIDDIFY_DIR/scripts/update.sh" ]] &&
+           ! cmp -s "$_upd_tmp" "$HIDDIFY_DIR/scripts/update.sh"; then
+            echo "update.sh changed while updating, continuing with the new version"
+            exec bash "$HIDDIFY_DIR/scripts/update.sh" --no-gui "$@"
+        fi
     fi
+
+    # Syncing is not part of the branch above: a run that stopped after the
+    # merge (submodule failure, Ctrl-C) left the panel on its old commit, and
+    # the next run reports "Already up to date" — it must still sync.
+    update_progress "Hiddify Updater" "Syncing submodules" 45
+    add_safe_directories
+    git submodule update --init --recursive || {
+        # A submodule cloned by that call is a repository of its own and
+        # gets the same ownership check: add it and try once more.
+        add_safe_directories
+        git submodule update --init --recursive || { error "git submodule update failed"; return 1; }
+    }
 
     update_progress "Hiddify Updater" "Applying the new code" 60
     # the running panel stays the old code until install.sh restarts it at the end
