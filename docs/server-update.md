@@ -17,11 +17,11 @@ git branch --show-current       # 应为 dev-custom
 free -h                         # 构建 UI 需要 ~1.2G 空闲内存或 swap
 ```
 
-| 服务器状态 | 走哪节 |
+| 服务器状态 | 走哪节 / 命令 |
 | --- | --- |
-| `git status` 正常，分支 `dev-custom` | 第 3 节 日常升级 |
-| `git status` 正常，分支是别的名字 | 先 `git checkout dev-custom`，再走第 3 节 |
-| 没有 `.git`（官方 release 安装） | 第 4 节 首次转换 |
+| `git status` 正常，分支 `dev-custom` | 第 3 / 4 节：`bash scripts/update.sh` |
+| `git status` 正常，分支是别的名字 | 先 `git checkout dev-custom`，再 `bash scripts/update.sh` |
+| 没有 `.git`（官方 release 安装） | 第 4 节：`switch_to_fork.sh`（只跑一次） |
 
 ---
 
@@ -58,7 +58,14 @@ bash scripts/update.sh
 
 ---
 
-## 4. 首次转换（还是官方 release 安装）
+## 4. 官方安装 ↔ fork：两条命令
+
+| 你现在的状态 | 用哪条 |
+| --- | --- |
+| 还是官方 release（没有 `.git`）——**首次**转 fork | `switch_to_fork.sh`（只跑一次） |
+| **已经是** fork / `dev-custom` checkout——日常升级 | `scripts/update.sh`（以后都用它） |
+
+### 首次转换（官方 → fork）
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/refs/heads/dev-custom/scripts/switch_to_fork.sh)
@@ -71,11 +78,18 @@ curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/refs/hea
 bash /tmp/sw.sh
 ```
 
-脚本幂等：检测到 `/opt/hiddify-manager/.git` 已存在就跳过转换，只做 fetch + 快进 + 子模块 + `make build`。
+### 不是首次（已转过 fork，日常升级）
 
-### 后续升级还能用它吗
+```bash
+cd /opt/hiddify-manager
+bash scripts/update.sh
+```
 
-**能跑，但不该日常用。** 它和 `update.sh` 的区别：
+面板里点「更新」也可以，git checkout 时同样会走 `update.sh` 这条链路。细节见第 3 节。
+
+### 为什么日常别再用 `switch_to_fork.sh`
+
+脚本幂等：已有 `.git` 时会跳过转换，只做 fetch + 快进 + 子模块 + `make build`——**能跑，但不该日常用**。
 
 | | `switch_to_fork.sh`（已是 checkout 时） | `update.sh` |
 | --- | --- | --- |
@@ -86,11 +100,8 @@ bash /tmp/sw.sh
 | 锁保护（防并发） | ✗ | ✓ |
 | 远程 / 分支可覆盖 | ✗（固定 `origin/dev-custom`） | ✓（`HIDDIFY_GIT_REMOTE` / `HIDDIFY_GIT_BRANCH`） |
 
-> 关键差别是**备份**：`switch_to_fork.sh` 的更新分支不跑 `services/panel/backup.sh`，
-> `update.sh` 会跑。面板启动会自动执行 `_vNNN` 迁移且不可回滚，
-> 没有新鲜备份就升级，出问题只能拿旧备份救。
-
-所以：**首次转换用它，之后日常升级一律用第 3 节的 `scripts/update.sh`。**
+> 关键差别是**备份**：`switch_to_fork.sh` 不跑 `services/panel/backup.sh`，`update.sh` 会跑。
+> 面板启动会执行不可回滚的 `_vNNN` 迁移，没新鲜备份就升级，出事只能靠旧备份。
 
 ---
 
