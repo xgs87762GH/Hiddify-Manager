@@ -23,21 +23,32 @@ if ! declare -F add_safe_directories >/dev/null; then
     function add_safe_directory() {
         local dir="${1%/}"
         [[ -n "$dir" ]] || return 0
-        git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" && return 0
-        git config --global --add safe.directory "$dir" >/dev/null 2>&1
+        git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" || \
+            git config --global --add safe.directory "$dir" 2>/dev/null
+        git config --system --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" || \
+            git config --system --add safe.directory "$dir" 2>/dev/null
     }
 
     function add_safe_directories() {
-        local d
-        add_safe_directory "$HIDDIFY_DIR"
-        add_safe_directory "$HIDDIFY_DIR/services/panel/src"
+        local d dirs=()
+        dirs+=("$HIDDIFY_DIR" "$HIDDIFY_DIR/services/panel/src")
         while IFS= read -r d; do
             [[ -n "$d" ]] || continue
-            add_safe_directory "$HIDDIFY_DIR/$d"
+            dirs+=("$HIDDIFY_DIR/$d")
         done < <(
             git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
             git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
         )
+        for d in "${dirs[@]}"; do
+            add_safe_directory "$d"
+        done
+        local i=${GIT_CONFIG_COUNT:-0}
+        for d in "${dirs[@]}"; do
+            export "GIT_CONFIG_KEY_$i=safe.directory"
+            export "GIT_CONFIG_VALUE_$i=${d%/}"
+            i=$((i + 1))
+        done
+        [[ $i -gt 0 ]] && export GIT_CONFIG_COUNT=$i
     }
 fi
 

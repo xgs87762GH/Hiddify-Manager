@@ -164,26 +164,44 @@ function hiddify_random_password() {
 function add_safe_directory() {
     local dir="${1%/}"
     [[ -n "$dir" ]] || return 0
-    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" && return 0
-    git config --global --add safe.directory "$dir" >/dev/null 2>&1 ||
-        warning "无法添加 safe.directory $dir（是否以 root 身份运行？）"
+    # 全局配置（当前用户，需要 $HOME 可写）与系统配置（需要 root，对所有用户生效）都尽力注册。
+    # 任一处不可写（典型：面板以 hiddify-panel 身份运行、却带着 root 的 $HOME）就跳过——真正兜底的
+    # 是 add_safe_directories 导出的 GIT_CONFIG_* 环境变量，它不依赖任何配置文件，谁跑都生效。
+    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" || \
+        git config --global --add safe.directory "$dir" 2>/dev/null
+    git config --system --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" || \
+        git config --system --add safe.directory "$dir" 2>/dev/null
 }
 
 function add_safe_directories() {
-    local d
+    local d dirs=()
     # 先标记 manager 和面板子模块。以前用管道 + while 子 shell，一旦 submodule
     # foreach 本身因 dubious ownership 失败，这两项就会被跳过。
-    add_safe_directory "$HIDDIFY_DIR"
-    add_safe_directory "$HIDDIFY_DIR/services/panel/src"
+    dirs+=("$HIDDIFY_DIR" "$HIDDIFY_DIR/services/panel/src")
     while IFS= read -r d; do
         [[ -n "$d" ]] || continue
-        add_safe_directory "$HIDDIFY_DIR/$d"
+        dirs+=("$HIDDIFY_DIR/$d")
     done < <(
         # 已声明的子模块：在任何一个被初始化之前就能读到
         git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
         # 嵌套子模块：父模块检出后才可见
         git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
     )
+
+    # 尽量写进配置文件（持久、对后续独立进程也有效）。
+    for d in "${dirs[@]}"; do
+        add_safe_directory "$d"
+    done
+
+    # 兜底：导出的 GIT_CONFIG_* 环境变量随进程树继承，即使 $HOME 不可写、也无论以
+    # root 还是 hiddify-panel 身份运行，本次更新里所有 git 子调用都能读到例外。
+    local i=${GIT_CONFIG_COUNT:-0}
+    for d in "${dirs[@]}"; do
+        export "GIT_CONFIG_KEY_$i=safe.directory"
+        export "GIT_CONFIG_VALUE_$i=${d%/}"
+        i=$((i + 1))
+    done
+    [[ $i -gt 0 ]] && export GIT_CONFIG_COUNT=$i
 }
 
 # 把调用方使用的旧上游仓库名（hiddify-panel、Hiddify-Panel、hiddify-manager……）
