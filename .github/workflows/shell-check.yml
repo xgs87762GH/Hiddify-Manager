@@ -47,4 +47,17 @@ jobs:
         # 这个冒烟会在 /opt/hiddify-manager 下建临时检出，并把子模块 chown 给
         # 另一个 uid 来复现 "detected dubious ownership"，所以必须以 root 运行；
         # runner 用户写不了 /opt，chown 也会失败，场景就无法复现。
-        run: sudo bash scripts/tests/smoke_update.sh 1
+        run: |
+          set -o pipefail
+          sudo bash scripts/tests/smoke_update.sh 1 2>&1 | tee smoke-update.log
+
+      - name: Surface smoke failures
+        # 失败原因只出现在日志里，转成 annotation 才能直接看到。
+        if: failure()
+        run: |
+          [ -f smoke-update.log ] || exit 0
+          grep -E 'FAIL|fatal|sudo:|Permission denied|No such file' smoke-update.log |
+            head -40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+          exit 0
