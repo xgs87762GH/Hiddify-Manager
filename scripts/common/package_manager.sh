@@ -72,11 +72,19 @@ download_package() {
     local package_name=$1
     local output_file=$2
     local requested_version=$3
-    echo "Entry: $entry"
 
     if [[ -z "$package_name" || -z "$output_file" ]]; then
-        error "Usage: $0 download <package_name> <output_file> [<version>]"
+        error "Usage: $0 download <package_name> <output_file> [<version>|force]"
         exit 10
+    fi
+
+    # "force" may be passed as the 3rd or 4th argument.
+    local force=0
+    if [[ "$3" == "force" ]]; then
+        force=1
+        requested_version=""
+    elif [[ "$4" == "force" ]]; then
+        force=1
     fi
 
     # Detect architecture
@@ -90,30 +98,37 @@ download_package() {
             ;;
     esac
 
-    # Find the package entry in the database
-    local entry
-    local force=0
-    [[ "$4" == "force" || "$3" == "force" ]] && force=1
+    # Currently installed version (runtime state).
     local existing_version
     existing_version=$(grep -m1 "^$package_name" "$CURRENT_PACKAGES" | cut -d'|' -f2)
-    
-    if [[ "$requested_version" == "" ]]; then
-        requested_version=$(get_latest_version $package_name $arch)
-    fi
-    
-    entry=$(grep "^$package_name|$requested_version" "$PACKAGES_LOCK" | grep "$arch")
-    
-    if [[ $force == 0 && "$requested_version" == "$existing_version" ]]; then
-        echo "Package $package_name version $requested_version for $arch already downloaded."
-        return 1
+
+    if [[ -z "$requested_version" ]]; then
+        requested_version=$(get_latest_version "$package_name" "$arch")
     fi
 
+    # Find the package entry in the lockfile.
+    local entry
+    entry=$(grep "^$package_name|$requested_version" "$PACKAGES_LOCK" | grep "$arch")
     if [[ -z "$entry" ]]; then
         error "Package $package_name version $requested_version for $arch not found."
         return 2
     fi
-    # Parse the entry
+
+    # Parse the entry.
+    local name version url stored_hash
     IFS='|' read -r name version arch url stored_hash <<< "$entry"
+
+    # Already recorded as installed: only skip when the file is actually present and
+    # intact. Without this, a deleted/corrupted binary (e.g. after a rebuild) is never
+    # restored and the caller's `chmod` on a missing file fails (e.g. the wgcf binary).
+    if [[ $force == 0 && "$requested_version" == "$existing_version" && -f "$output_file" ]]; then
+        local current_hash
+        current_hash=$(generate_hash "$output_file")
+        if [[ "$current_hash" == "$stored_hash" ]]; then
+            echo "Package $package_name version $requested_version for $arch already downloaded."
+            return 1
+        fi
+    fi
 
     # Download the file
     echo "Downloading package $package_name version $requested_version for $arch... current version is $existing_version"
@@ -121,7 +136,7 @@ download_package() {
     curl -sL -o "$tmp_file" "$url"
     if [[ $? -ne 0 ]]; then
         error "Error downloading file: $url"
-        rm "$tmp_file"
+        rm -f "$tmp_file"
         return 3
     fi
     mv "$tmp_file" "$output_file"
@@ -130,7 +145,7 @@ download_package() {
     local downloaded_hash=$(generate_hash "$output_file")
     if [[ "$downloaded_hash" != "$stored_hash" ]]; then
         error "Hash mismatch for $output_file. Expected $stored_hash, got $downloaded_hash."
-        rm "$output_file"
+        rm -f "$output_file"
         return 4
     fi
 
