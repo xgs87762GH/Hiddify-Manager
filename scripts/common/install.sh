@@ -74,7 +74,7 @@ declare -a excluded_interfaces=("warp" "lo")
 
 if [[ "$KERNEL_IPV6" == true ]]; then
 for interface_name in $(ip link | awk -F': ' '$2 ~ /^[[:alnum:]]+$/ {print $2}'); do
-    if [[ " ${excluded_interfaces[@]} " =~ " ${interface_name} " ]]; then
+    if [[ " ${excluded_interfaces[*]} " =~ " ${interface_name} " ]]; then
         continue
     fi
 

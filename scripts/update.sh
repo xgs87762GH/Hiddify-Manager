@@ -234,10 +234,10 @@ function main() {
 if [[ "$HIDDIFY_DISABLE_UPDATE" == "1" || "$HIDDIFY_DISABLE_UPDATE" == "true" ]];then
     error "更新已被禁用，因为环境变量 HIDDIFY_DISABLE_UPDATE == $HIDDIFY_DISABLE_UPDATE"
     exit 9
-elif [[ " $@ " == *" --no-gui "* ]]; then
+elif [[ " $* " == *" --no-gui "* ]]; then
     set -- "${@/--no-gui/}"
     set_lock $NAME
-    if [[ " $@ " == *" --no-log "* ]]; then
+    if [[ " $* " == *" --no-log "* ]]; then
         set -- "${@/--no-log/}"
         main "$@"
         error_code=$?
@@ -247,14 +247,14 @@ elif [[ " $@ " == *" --no-gui "* ]]; then
     fi
     remove_lock $NAME
 else
-    show_progress_window --subtitle "更新器" --log $LOG_FILE /opt/hiddify-manager/scripts/update.sh $@ --no-gui --no-log
+    show_progress_window --subtitle "更新器" --log $LOG_FILE /opt/hiddify-manager/scripts/update.sh "$@" --no-gui --no-log
     error_code=$?
     if [[ $error_code != "0" ]]; then
         # echo less -r -P"Installation Failed! Press q to exit" +G "$log_file"
         msg_with_hiddify "更新失败！退出码=$error_code"
     else
         msg_with_hiddify "更新已成功完成。"
-        check_hiddify_panel $@ |& tee -a $LOG_FILE
+        check_hiddify_panel "$@" |& tee -a $LOG_FILE
     fi
 fi
 exit $error_code

@@ -18,7 +18,7 @@ checkOS() {
         exit 1
     fi
     # 检查发行版是否受支持
-    if [[ " ${supported_distros[@]} " =~ " ${distro_name} " ]]; then
+    if [[ " ${supported_distros[*]} " =~ " ${distro_name} " ]]; then
         echo "当前系统为 ${distro_name} ${distro_version}"
         : #空操作
     else

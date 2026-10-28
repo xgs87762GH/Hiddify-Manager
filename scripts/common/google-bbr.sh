@@ -118,7 +118,7 @@ get_hint(){
 display_menu(){
     local soft=${1}
     local default=${2}
-    eval local arr=(\${${soft}_arr[@]})
+    eval "local arr=(\${${soft}_arr[@]})"
     local default_prompt
     if [[ "$default" != "" ]]; then
         if [[ "$default" == "last" ]]; then
@@ -171,7 +171,7 @@ get_latest_version() {
     latest_version=($(wget -qO- https://kernel.ubuntu.com/~kernel-ppa/mainline/ | awk -F'\"v' '/v[4-9]./{print $2}' | cut -d/ -f1 | grep -v - | sort -V))
     [ ${#latest_version[@]} -eq 0 ] && _error "获取最新内核版本失败。"
     kernel_arr=()
-    for i in ${latest_version[@]}; do
+    for i in "${latest_version[@]}"; do
         if _version_ge $i 5.15; then
             kernel_arr+=($i);
         fi

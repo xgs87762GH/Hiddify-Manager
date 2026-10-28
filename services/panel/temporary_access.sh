@@ -12,4 +12,4 @@ function main() {
     echo "iptables -D INPUT -p tcp --dport $PORT -j ACCEPT" | at now + 4 hour
 }
 
-main $@ |& tee /opt/hiddify-manager/data/log/temporary_access.log
+main "$@" |& tee /opt/hiddify-manager/data/log/temporary_access.log

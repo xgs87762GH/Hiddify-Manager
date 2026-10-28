@@ -378,7 +378,7 @@ function is_installed_pypi_package() {
 
 function install_pypi_package() {
     activate_python_venv
-    for package in $@; do
+    for package in "$@"; do
         if ! is_installed_pypi_package $package; then
             if [ "$USE_VENV" == "310" ];then
                 pip install -U $package
@@ -437,7 +437,7 @@ install_package() {
 }
 
 function remove_package() {
-    for package in $@; do
+    for package in "$@"; do
         if dpkg -l | grep -q "^ii  $package"; then
             with_lock apt apt-get remove -y --auto-remove "$package"
         fi
@@ -1201,7 +1201,7 @@ function checkOS() {
         exit 1
     fi
     # 检查该发行版是否受支持
-    if [[ " ${supported_distros[@]} " =~ " ${distro_name} " ]]; then
+    if [[ " ${supported_distros[*]} " =~ " ${distro_name} " ]]; then
         echo "你的 Linux 发行版是 ${distro_name} ${distro_version}"
         : # 空操作命令
     else

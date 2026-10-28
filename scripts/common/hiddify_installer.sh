@@ -380,22 +380,22 @@ function custom_version_installer(){
     fi
 }
 
-if [[ " $@ " == *" custom "* ]];then
+if [[ " $* " == *" custom "* ]];then
     custom_version_installer
     exit $?
 fi
 
 
 export USE_VENV=313
-if [[ " $@ " == *" dev "* || " $@ " == *" docker "* || " $@ " == *" develop "* || " $@ " == *" beta "* ]];then
+if [[ " $* " == *" dev "* || " $* " == *" docker "* || " $* " == *" develop "* || " $* " == *" beta "* ]];then
     export USE_VENV=313
 fi
 
 # 运行主函数并记录输出
-if [[ " $@ " == *" --no-gui "* || "$(get_installed_panel_version) " == "8."* || "$NO_UI" == "true" ]]; then
+if [[ " $* " == *" --no-gui "* || "$(get_installed_panel_version) " == "8."* || "$NO_UI" == "true" ]]; then
     set -- "${@/--no-gui/}"
     set_lock $NAME
-    if [[ " $@ " == *" --no-log "* ]]; then
+    if [[ " $* " == *" --no-log "* ]]; then
         set -- "${@/--no-log/}"
         install_panel "$@"
         error_code=$?
@@ -407,7 +407,7 @@ if [[ " $@ " == *" --no-gui "* || "$(get_installed_panel_version) " == "8."* || 
     remove_lock $NAME
 else
     
-    show_progress_window --subtitle "安装器" --log $LOG_FILE $0 $@ --no-gui --no-log
+    show_progress_window --subtitle "安装器" --log $LOG_FILE $0 "$@" --no-gui --no-log
     
     error_code=$?
     if [[ $error_code != "0" ]]; then
@@ -415,7 +415,7 @@ else
         msg_with_hiddify "安装失败！退出码=$error_code"
     else
         msg_with_hiddify "安装已成功完成。"
-        check_hiddify_panel $@ |& tee -a $LOG_FILE
+        check_hiddify_panel "$@" |& tee -a $LOG_FILE
         read -p "按任意键进入菜单" -n 1 key
     fi
     if [ -f /opt/hiddify-manager/scripts/hiddify ]; then

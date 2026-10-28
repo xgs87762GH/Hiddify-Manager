@@ -18,7 +18,7 @@ arr['android-hiddifyng']="https://youtu.be/7B0PO3HM6Vg"
 arr['android-hiddifyclash']="https://youtu.be/8P887E-KMls"
 arr['windows-hiddifyn']="https://youtu.be/o9L2sI2T53Q"
 
-for key in ${!arr[@]}; do
+for key in "${!arr[@]}"; do
     dst=videos/$key.mp4
     link=${arr[${key}]}
     if [[ ! -f $dst ]];then

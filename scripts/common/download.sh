@@ -2,14 +2,14 @@
 
 # 兼容旧调用方式：若设置了 VER，则把它作为第一个参数
 if [[ "$VER" != "" ]];then
-    set -- $VER  $@
+    set -- $VER "$@"
 
 fi
 
-echo "$0 的输入参数为 $@"
+echo "$0 的输入参数为 $*"
 
 
-if [[ " $@ " != *"--no-gui"* ]] &&  [[ "$0" == "bash" ]]; then
+if [[ " $* " != *"--no-gui"* ]] &&  [[ "$0" == "bash" ]]; then
     echo "本脚本已废弃！请改用以下命令："
     echo ""
     echo "bash <(curl https://i.hiddify.com/$1)"
@@ -17,11 +17,11 @@ if [[ " $@ " != *"--no-gui"* ]] &&  [[ "$0" == "bash" ]]; then
     exit 1
 fi
 
-echo "正在下载 '$@'"
+echo "正在下载 '$*'"
 
 # v8 是历史迁移路径：本 fork 无法提供远古的 hiddify-config 代码，
 # 因此这里刻意仍指向官方旧仓库。不要用它来"更新"。
-if [[ " $@ " == *" v8 "* ]]; then
+if [[ " $* " == *" v8 "* ]]; then
     sudo bash -c "$(curl -sLfo- https://raw.githubusercontent.com/hiddify/hiddify-config/main/scripts/common/download_install.sh)"
     exit $?
 fi
@@ -61,4 +61,4 @@ curl -fsSL -o /tmp/hiddify/utils.sh "$base_url/common/utils.sh" || {
     echo "无法从 $base_url 下载 utils.sh" >&2; exit 1; }
 chmod 700 /tmp/hiddify/*
 
-/tmp/hiddify/hiddify_installer.sh $@
+/tmp/hiddify/hiddify_installer.sh "$@"

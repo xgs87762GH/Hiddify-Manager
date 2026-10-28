@@ -39,7 +39,9 @@ jobs:
           done < <(git ls-files '*.sh')
 
       - name: shellcheck
-        run: shellcheck --severity=error $(git ls-files '*.sh')
+        # --shell=bash: 一部分脚本是被 source 的库（没有 shebang），它们的
+        # 解释器就是 bash——上一步 bash -n 也基于这个假设。
+        run: shellcheck --shell=bash --severity=error $(git ls-files '*.sh')
 
       - name: Smoke test the update flow
         run: bash scripts/tests/smoke_update.sh 1

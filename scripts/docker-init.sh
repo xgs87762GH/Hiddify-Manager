@@ -36,7 +36,7 @@ if [ ! -f services/panel/src/hiddifypanel/static/admin-v2/index.html ] ||
 fi
 uv pip install -e services/panel/src 
 
-DO_NOT_INSTALL=true /opt/hiddify-manager/scripts/install.sh docker --no-gui $@
+DO_NOT_INSTALL=true /opt/hiddify-manager/scripts/install.sh docker --no-gui "$@"
 /opt/hiddify-manager/scripts/status.sh --no-gui
 
 echo "Hiddify 已启动！5 秒后开始显示系统日志"
