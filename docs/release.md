@@ -87,13 +87,13 @@ git push origin dev-custom --tags
 
 ### 发布说明（release 正文）
 
-仓库里的 `.github/release_notes/<tag>.md` 会**覆盖**自动生成的 changelog：
+仓库里的 `.github/release_notes/<tag>.md` 会**覆盖**自动生成的 changelog。新版本请从
+[`.github/release_notes/TEMPLATE.md`](../.github/release_notes/TEMPLATE.md) 复制改写。
 
-```
-.github/release_notes/v14.1.0b3.md     # 手写说明：改了什么、对比官方
-```
+**目录别弄花**：GitHub Releases 右侧「On this page」会把正文里**单独成行的 `# …`** 当成一级标题
+（包括写在 \`\`\`bash 代码块里的 shell 注释）。说明写在代码块外面；块内只留可执行命令。
 
-没有这个文件时，正文仍是 `.github/release_message.sh` 生成的内容。
+没有 curated 文件时，正文仍是 `.github/release_message.sh` 生成的内容。
 客户端（`hiddify-app`）另有一个轻量工作流 `release-notes.yml`：即使官方那套需要签名密钥的
 构建流程失败，也会先建出带说明的 Release 条目。
 
