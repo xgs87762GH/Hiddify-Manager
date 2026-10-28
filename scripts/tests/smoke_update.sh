@@ -48,6 +48,9 @@ prepare_env() {
     git config --global user.email smoke@t
     git config --global user.name smoke
     rm -rf "${ROOT:?}/"* "${ROOT:?}/.[!.]*" 2>/dev/null
+    # 本脚本可能以 root 运行（写 /opt、chown 需要），而 $REPO 属于运行者账号；
+    # 不认这个目录的话，取历史 update.sh 时会报 dubious ownership。
+    git config --global --add safe.directory "$REPO"
 }
 
 restore_preexisting() {

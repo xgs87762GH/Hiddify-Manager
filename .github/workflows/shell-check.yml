@@ -44,4 +44,7 @@ jobs:
         run: shellcheck --shell=bash --severity=error $(git ls-files '*.sh')
 
       - name: Smoke test the update flow
-        run: bash scripts/tests/smoke_update.sh 1
+        # 这个冒烟会在 /opt/hiddify-manager 下建临时检出，并把子模块 chown 给
+        # 另一个 uid 来复现 "detected dubious ownership"，所以必须以 root 运行；
+        # runner 用户写不了 /opt，chown 也会失败，场景就无法复现。
+        run: sudo bash scripts/tests/smoke_update.sh 1
