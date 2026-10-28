@@ -253,6 +253,10 @@ scenario_d() {
     # server that has none: start from a clean global config, like a fresh host.
     rm -f "$HOME_DIR/.gitconfig"
     git config --global protocol.file.allow always
+    # GitHub Actions 的镜像在 /etc/gitconfig 里写了 safe.directory = *，
+    # 光清掉 ~/.gitconfig 还不够——root 读任何仓库都不会报 ownership 错误，
+    # fixture 就复现不出来。这里把系统级配置也摘掉，才算真正"新装机器"。
+    export GIT_CONFIG_SYSTEM=/dev/null
 
     local out1 out2 control
     control=$(cd "$ROOT" && git -C services/panel/src rev-parse HEAD 2>&1)
