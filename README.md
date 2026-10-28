@@ -33,7 +33,39 @@
 
 ## 快速开始
 
-### 全新部署（推荐 git 方式）
+> 下面每条都是**一条命令**：不用先 clone、不用 cd、不用记路径。
+> 装好之后也可以直接跑 `bash /opt/hiddify-manager/scripts/onekey.sh <子命令>`，省掉 curl。
+
+### 全新部署
+
+```bash
+sudo -i
+ONEKEY=https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh
+bash <(curl -fsSL "$ONEKEY") install
+```
+
+脚本会 `git clone --recurse-submodules` 本 fork 到 `/opt/hiddify-manager`（含面板子模块），
+再装好 HAProxy、代理核心、MySQL、Redis 和面板。全程无交互，10–30 分钟。
+
+### 其它日常操作
+
+同一个脚本的其它子命令：
+
+| 子命令 | 作用 |
+| --- | --- |
+| `update` | 升级（备份 → ff-only 快进 fork → 子模块 → `make build`） |
+| `reinstall` | 按当前代码重装全部服务（不拉新代码） |
+| `version v14.1.0b3` | 装指定发布版本（仅非 git 安装；会覆盖 `/opt` 下被跟踪的文件） |
+| `switch` | 机器上已是官方版本 → 转成本 fork 的 git 检出 |
+
+用法就是把 `install` 换掉，例如：
+
+```bash
+bash <(curl -fsSL "$ONEKEY") update
+bash <(curl -fsSL "$ONEKEY") version v14.1.0b3
+```
+
+### 手动部署（与 `install` 等价）
 
 ```bash
 sudo -i
@@ -41,21 +73,6 @@ git clone --recurse-submodules -b dev-custom \
     https://github.com/xgs87762GH/Hiddify-Manager.git /opt/hiddify-manager
 cd /opt/hiddify-manager
 bash scripts/install.sh --no-gui
-```
-
-### 已是官方安装，转成 fork
-
-```bash
-sudo -i
-bash <(curl -sSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/switch_to_fork.sh)
-```
-
-### 日常升级
-
-```bash
-sudo -i
-cd /opt/hiddify-manager
-bash scripts/update.sh          # 备份 → ff-only 快进 fork → 子模块 → make build
 ```
 
 面板里点"更新"效果相同：git checkout 部署时只快进 fork，**从不下载官方包**。
@@ -104,6 +121,7 @@ WireGuard、SSH、Telegram 代理、DNS over HTTPS、CDN / 域名前置。
 | `make build` | 构建 UI 并完整安装 / 重装 |
 | `make ui` | 只构建管理端 + 用户端 UI |
 | `make apply` | 只应用配置（不重装服务） |
+| `bash scripts/onekey.sh <install\|update\|reinstall\|version\|switch>` | 统一入口；上面那些操作的安全包装，可 `bash <(curl …)` 直接跑 |
 | `bash scripts/update.sh` | 升级（备份 + 快进 + 重建） |
 | `bash scripts/switch_to_fork.sh` | 官方安装 → fork checkout（幂等） |
 

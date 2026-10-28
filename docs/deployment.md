@@ -9,12 +9,14 @@
 
 | 方式 | 什么时候用 | 命令 |
 | --- | --- | --- |
-| **Git 安装（推荐）** | 生产与开发都用这个，升级只快进本 fork | 见第 3 节 |
-| **官方装过 → 转 fork** | 机器上已经是官方版本 | [升级 §4](server-update.md) 的 `switch_to_fork.sh` |
+| **一键安装（推荐）** | 新机器，不想记步骤 | 第 3 节的一条命令 |
+| **手动 git 安装** | 想自己控制 clone 与分支 | 第 3 节末尾（与一键等价） |
+| **官方装过 → 转 fork** | 机器上已经是官方版本 | `onekey.sh switch` |
 | Docker | 要隔离（**仍属实验性**） | 见 [DOCKER.md](DOCKER.md) |
 
 > **不要用官方一键脚本 `bash <(curl https://i.hiddify.com/beta)`**：它装的是官方代码，
-> 后续升级会去拉官方仓库。本 fork 的安装入口只有一个：`git clone` + `scripts/install.sh`。
+> 后续升级会去拉官方仓库。本 fork 的安装入口只有两个：`scripts/onekey.sh install`，
+> 或等价的 `git clone --recurse-submodules` + `scripts/install.sh`。
 > Docker 支持还没稳定：进程模型仍是 python-systemctl shim，默认 profile 要 privileged + host network。
 
 ---
@@ -46,7 +48,25 @@ ss -lntp | grep -E ':80 |:443 '     # 有输出说明被占，先停掉 nginx / 
 
 ---
 
-## 3. 全新部署（git，fork 分支）
+## 3. 全新部署
+
+一条命令，不用先 clone、不用 cd：
+
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh) install
+```
+
+它做的就是下面的手动流程，外加前置检查：
+
+- 目录不存在 → `git clone --recurse-submodules -b dev-custom` 到 `/opt/hiddify-manager`（含面板子模块）
+- 随后执行 `scripts/install.sh --no-gui --no-log`
+- 目录已存在但不是 git 检出（官方 zip 安装）→ **拒绝覆盖**，并提示改用 `onekey.sh switch`
+- 已经是 git 检出 → 自动转为 `onekey.sh update`，不会重复 clone
+
+装的是本 fork 的 `dev-custom` 与面板 fork，之后升级只快进这条分支，不会被官方版本覆盖。
+
+### 手动安装（与一键等价）
 
 ```bash
 sudo -i
@@ -55,8 +75,6 @@ git clone --recurse-submodules -b dev-custom \
 cd /opt/hiddify-manager
 bash scripts/install.sh --no-gui
 ```
-
-装的是本 fork 的 `dev-custom` 与面板 fork，之后升级只快进这条分支，不会被官方版本覆盖。
 脚本要从 GitHub 拉核心二进制、面板源码和 Node 工具链，依赖清单见
 [构建与安装依赖](build-requirements.md)。
 

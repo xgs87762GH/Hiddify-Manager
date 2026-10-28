@@ -48,6 +48,7 @@
 | --- | --- | --- |
 | `hiddify-manager.zip` | `xgs87762GH/Hiddify-Manager` releases | **非 git checkout** 的服务器升级 / 指定 tag 安装 |
 | `download.sh` / `utils.sh` | fork 的 `dev-custom` 分支 raw 地址 | 安装与更新的引导脚本 |
+| `onekey.sh` | fork 的 `dev-custom` 分支 raw 地址 | 一键 `install` / `update` / `reinstall` / `version` / `switch` 的总入口 |
 
 > fork 的 release 由 [.github/workflows/release.yml](../.github/workflows/release.yml) 在推 `v*` tag 时自动生成。
 

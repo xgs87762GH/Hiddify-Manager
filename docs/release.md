@@ -120,6 +120,7 @@ unzip -l /tmp/hm.zip | grep services/panel/src/hiddifypanel/VERSION.py   # 应�
 
 | 服务器状态 | 行为 |
 | --- | --- |
+| 任意状态，一条命令 | `onekey.sh update`（已装）/ `onekey.sh version v14.1.0b3`（指定版本） |
 | git checkout（`dev-custom`） | 面板点"更新"或 `bash scripts/update.sh` → `git fetch` + `merge --ff-only` fork，随后 `make build` |
 | 非 git（官方 zip 安装） | 面板点"更新" → 按 `package_mode` 查 fork 的 release → 下载本 fork 的 `hiddify-manager.zip` 覆盖，面板源码再从 fork 克隆 |
 | 指定版本安装 | `bash scripts/common/download.sh v14.1.0b3`（tag 必须存在于本 fork） |

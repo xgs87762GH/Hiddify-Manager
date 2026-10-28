@@ -41,6 +41,21 @@ git push origin dev-custom
 
 ## 3. 日常升级（已是 checkout）
 
+不用先 cd，一条命令：
+
+```bash
+sudo -i
+bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh) update
+```
+
+在服务器上也可以直接跑本机副本（不联网下载引导脚本）：
+
+```bash
+bash /opt/hiddify-manager/scripts/onekey.sh update
+```
+
+等价的传统写法：
+
 ```bash
 cd /opt/hiddify-manager
 bash scripts/update.sh
