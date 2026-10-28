@@ -4,6 +4,10 @@ source /opt/hiddify-manager/services/mysql/utils.sh
 cd "$(dirname -- "$0")"
 
 install_package mariadb-server
+if ! is_installed_package mariadb-server >/dev/null; then
+    error "mariadb-server could not be installed (see apt output above). Aborting."
+    exit 1
+fi
 
 # 不要放进 $( )：它会设置 HIDDIFY_MYSQL_PASS_IS_NEW，供下面首次安装时的安全加固使用
 ensure_mysql_password

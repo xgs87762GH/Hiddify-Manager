@@ -13,6 +13,11 @@ mkdir -p /opt/hiddify-manager/data/hiddify-core
 set_files_in_folder_readable_to_hiddify_common_group /opt/hiddify-manager/generated/hiddify-core.json
 
 rm /opt/hiddify-manager/data/hiddify-core/tor/lock 2>/dev/null || true
+# A reload keeps the running binary: after install.sh put a new one in place, restart onto it.
+main_pid=$(systemctl show -p MainPID --value hiddify-core.service 2>/dev/null)
+if [[ "$main_pid" != "" && "$main_pid" != "0" && "$(readlink /proc/$main_pid/exe 2>/dev/null)" == *" (deleted)" ]]; then
+	systemctl restart hiddify-core.service
+fi
 if config_check_ok hiddify-core /opt/hiddify-manager/generated/hiddify-core.json \
 	/opt/hiddify-manager/services/hiddify-core/hiddify-core check -c /opt/hiddify-manager/generated/hiddify-core.json; then
 	systemctl reload hiddify-core.service

@@ -185,7 +185,8 @@ function main() {
         telegram_on=false
         [ "$(hconfig telegram_enable)" = "true" ] || [ "$(hconfig telegram_webproxy_enable)" = "true" ] && telegram_on=true
         add_task "Telegram 代理" install_run services/telegram "$telegram_on"
-        add_task "FakeTLS 代理" install_run services/ssfaketls "$(hconfig "ssfaketls_enable")"
+        # Deprecated: hiddify-core serves SS FakeTLS with its own simple-obfs server; this only removes obfs-server
+        add_task "FakeTLS 代理" install_run services/ssfaketls false
         add_task "WARP" install_run services/warp 1
         add_task "Xray" install_run services/xray 1
     fi

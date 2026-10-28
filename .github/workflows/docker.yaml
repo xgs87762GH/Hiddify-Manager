@@ -12,33 +12,22 @@ on:
 # pushing there from a fork is denied.
 jobs:
   make-upload-docker:
-<<<<<<< HEAD
     permissions:
       contents: read
       packages: write
-    # The image builds both the user UI and Admin V2 with npm and then runs the installer,
-    # which is far more than the 10 minutes this job used to get.
-=======
-    permissions: write-all
-    # ARM cross-build via QEMU is much slower than amd64; 10m always timed out.
->>>>>>> 05a8dd73 (fix(ci): build linux/arm64 docker images (#5429))
+    # npm UI build + installer; ARM QEMU is slower still — keep well above 10m.
     timeout-minutes: 60
 
     runs-on: ubuntu-latest
     strategy:
       fail-fast: true
       matrix:
-        # arm64 would need QEMU emulation for the whole npm build; enable it once this is
-        # worth the extra build time.
         platform:
           - linux/amd64
-<<<<<<< HEAD
-=======
           - linux/arm64
         # Do not use ``exclude`` with ``github.ref`` expressions: ``github.ref`` is
         # the full ref (refs/heads/main, refs/tags/v…) and never equals ``tag``,
         # so arm64 was excluded on every run (#5429).
->>>>>>> 05a8dd73 (fix(ci): build linux/arm64 docker images (#5429))
     steps:
       - name: Checkout
         uses: actions/checkout@v4
