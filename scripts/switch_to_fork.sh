@@ -51,19 +51,23 @@ die()  { echo -e "\033[1;31merror:\033[0m $*" >&2; exit 1; }
 # hiddify-panel, and every submodule below it needs its own exception, or the
 # update dies with "Unable to find current revision in submodule path".
 function add_safe_directory() {
-    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$1" ||
-        git config --global --add safe.directory "$1" >/dev/null 2>&1
+    local dir="${1%/}"
+    [ -n "$dir" ] || return 0
+    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" && return 0
+    git config --global --add safe.directory "$dir" >/dev/null 2>&1
 }
 
 function add_safe_directories() {
     local d
     add_safe_directory "$ROOT"
-    {
+    add_safe_directory "$ROOT/services/panel/src"
+    while IFS= read -r d; do
+        [ -n "$d" ] || continue
+        add_safe_directory "$ROOT/$d"
+    done < <(
         git -C "$ROOT" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
         git -C "$ROOT" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
-    } | while read -r d; do
-        [ -n "$d" ] && add_safe_directory "$ROOT/$d"
-    done
+    )
 }
 
 # --- already a git checkout: just update from git -------------------------------

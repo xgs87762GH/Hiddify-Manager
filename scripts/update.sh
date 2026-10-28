@@ -24,23 +24,23 @@ LOG_FILE="$(log_file $NAME)"
 # its own copy for an utils.sh that predates them.
 if ! declare -F add_safe_directories >/dev/null; then
     function add_safe_directory() {
-        local dir="$1"
-        git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" ||
-            git config --global --add safe.directory "$dir" >/dev/null 2>&1
+        local dir="${1%/}"
+        [[ -n "$dir" ]] || return 0
+        git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" && return 0
+        git config --global --add safe.directory "$dir" >/dev/null 2>&1
     }
 
     function add_safe_directories() {
         local d
         add_safe_directory "$HIDDIFY_DIR"
-        {
-            # declared submodules, read before any of them is initialized
-            git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
-            # nested ones, only visible once their parent is checked out
-            git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
-        } | while read -r d; do
+        add_safe_directory "$HIDDIFY_DIR/services/panel/src"
+        while IFS= read -r d; do
             [[ -n "$d" ]] || continue
             add_safe_directory "$HIDDIFY_DIR/$d"
-        done
+        done < <(
+            git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
+            git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+        )
     }
 fi
 

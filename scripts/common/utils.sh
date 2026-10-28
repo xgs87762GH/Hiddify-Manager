@@ -164,21 +164,28 @@ function hiddify_random_password() {
 # before any git command that may reach a submodule, or the update stops with
 # "Unable to find current revision in submodule path".
 function add_safe_directory() {
-    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$1" ||
-        git config --global --add safe.directory "$1" >/dev/null 2>&1
+    local dir="${1%/}"
+    [[ -n "$dir" ]] || return 0
+    git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" && return 0
+    git config --global --add safe.directory "$dir" >/dev/null 2>&1 ||
+        warning "could not add safe.directory $dir (run as root?)"
 }
 
 function add_safe_directories() {
     local d
+    # Always mark the manager + panel submodule first. A pipe+while subshell used
+    # to skip these when submodule foreach itself died on dubious ownership.
     add_safe_directory "$HIDDIFY_DIR"
-    {
+    add_safe_directory "$HIDDIFY_DIR/services/panel/src"
+    while IFS= read -r d; do
+        [[ -n "$d" ]] || continue
+        add_safe_directory "$HIDDIFY_DIR/$d"
+    done < <(
         # declared submodules, readable before any of them is initialized
         git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
         # nested ones, only visible once their parent is checked out
         git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
-    } | while read -r d; do
-        [ -n "$d" ] && add_safe_directory "$HIDDIFY_DIR/$d"
-    done
+    )
 }
 
 # Map the legacy upstream repo names used by the callers (hiddify-panel,
