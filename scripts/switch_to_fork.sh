@@ -1,19 +1,19 @@
 #!/bin/bash
-# Turn /opt/hiddify-manager from a downloaded release into a git checkout of your own fork,
-# then apply it. Safe to re-run: when it is already a checkout it just updates from git.
+# 把 /opt/hiddify-manager 从"下载的 release"变成你自己 fork 的 git 检出，然后应用配置。
+# 可重复执行：已经是检出状态时只做 git 更新。
 #
 #   bash <(curl -sSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/refs/heads/dev-custom/scripts/switch_to_fork.sh)
 #
-# Options (each also has an environment variable):
-#   --branch <name>      branch to track             (default: dev-custom, $HIDDIFY_FORK_BRANCH)
-#   --fork <url>         your Hiddify-Manager fork   (default: $HIDDIFY_FORK_URL)
-#   --panel-repo <o/r>   also track your panel fork  (default: keep official, $HIDDIFY_PANEL_REPO)
-#   --base <branch>      upstream branch to diff against (default: main)
-#   --no-backup          skip the backup step (not recommended)
-#   -y, --yes            no confirmation prompt
+# 选项（同时也都可以用环境变量指定）：
+#   --branch <name>      跟踪的分支             （默认 dev-custom，$HIDDIFY_FORK_BRANCH）
+#   --fork <url>         你的 Hiddify-Manager fork（默认 $HIDDIFY_FORK_URL）
+#   --panel-repo <o/r>   同时跟踪你的面板 fork   （默认保留官方，$HIDDIFY_PANEL_REPO）
+#   --base <branch>      对比用的上游分支        （默认 main）
+#   --no-backup          跳过备份步骤（不推荐）
+#   -y, --yes            不再询问确认
 #
-# Untracked files are never touched: data/ (database config, certificates, backups),
-# generated/, .venv313/ and everything downloaded into services/*/bin.
+# 未跟踪的文件一律不动：data/（数据库配置、证书、备份）、
+# generated/、.venv313/ 以及下载到 services/*/bin 下的所有内容。
 
 ROOT="${HIDDIFY_DIR:-/opt/hiddify-manager}"
 FORK_URL="${HIDDIFY_FORK_URL:-https://github.com/xgs87762GH/Hiddify-Manager.git}"
@@ -33,23 +33,22 @@ while [ $# -gt 0 ]; do
         --no-backup)  DO_BACKUP=0; shift ;;
         -y|--yes)     ASSUME_YES=1; shift ;;
         -h|--help)
-            # print the header comment block (everything up to the first line of code)
+            # 打印文件头部的注释块（直到第一行代码之前）
             awk 'NR==1{next} /^#/{sub(/^# ?/,""); print; next} {exit}' "$0"
             exit 0 ;;
-        *) echo "error: unknown option: $1" >&2; exit 1 ;;
+        *) echo "错误：未知参数：$1" >&2; exit 1 ;;
     esac
 done
 
 log()  { echo -e "\033[1;34m==>\033[0m $*"; }
-warn() { echo -e "\033[1;33mwarning:\033[0m $*" >&2; }
-die()  { echo -e "\033[1;31merror:\033[0m $*" >&2; exit 1; }
+warn() { echo -e "\033[1;33m警告：\033[0m $*" >&2; }
+die()  { echo -e "\033[1;31m错误：\033[0m $*" >&2; exit 1; }
 
-# This script is downloaded standalone (curl … | bash), so it cannot source
-# scripts/common/utils.sh: it carries the same helpers update.sh uses. git
-# refuses a repository owned by another user ("dubious ownership"), and the
-# exception is per directory, never recursive: $ROOT is written by root and by
-# hiddify-panel, and every submodule below it needs its own exception, or the
-# update dies with "Unable to find current revision in submodule path".
+# 本脚本是独立下载执行的（curl … | bash），无法 source
+# scripts/common/utils.sh，因此自带与 update.sh 相同的辅助函数。git 会拒绝
+# 属于其他用户的仓库（"dubious ownership"），而该例外是按目录生效、不会递归：
+# $ROOT 会被 root 和 hiddify-panel 写入，其下每个子模块都需要各自例外，
+# 否则更新会因 "Unable to find current revision in submodule path" 失败。
 function add_safe_directory() {
     local dir="${1%/}"
     [ -n "$dir" ] || return 0
@@ -70,49 +69,49 @@ function add_safe_directories() {
     )
 }
 
-# --- already a git checkout: just update from git -------------------------------
+# --- 已经是 git 检出：直接从 git 更新 -------------------------------------------
 update_from_git() {
-    cd "$ROOT" || die "cannot enter $ROOT"
+    cd "$ROOT" || die "无法进入 $ROOT"
     add_safe_directories
-    log "fetching $BRANCH"
-    git fetch --prune origin "$BRANCH" || die "git fetch failed"
-    git merge --ff-only "origin/$BRANCH" || die "cannot fast-forward, resolve by hand: cd $ROOT && git status"
+    log "正在拉取 $BRANCH"
+    git fetch --prune origin "$BRANCH" || die "git fetch 失败"
+    git merge --ff-only "origin/$BRANCH" || die "无法快进合并，请手动处理：cd $ROOT && git status"
     add_safe_directories
     git submodule update --init --recursive || {
-        # a submodule cloned above is a repository of its own: add it and retry
+        # 上面克隆的子模块本身就是一个独立仓库：补加例外后重试
         add_safe_directories
-        git submodule update --init --recursive || warn "submodule update failed"
+        git submodule update --init --recursive || warn "子模块更新失败"
     }
-    log "applying"
+    log "正在应用"
     make build
     return $?
 }
 
-# --- first time: release install -> git checkout --------------------------------
+# --- 首次：release 安装 -> git 检出 ---------------------------------------------
 switch_to_fork() {
-    log "this turns $ROOT into a git checkout of $FORK_URL (branch $BRANCH)"
-    echo "    kept    : data/ generated/ .venv313/ services/*/bin (untracked files)"
-    echo "    replaced: every file tracked in $BRANCH"
+    log "这会把 $ROOT 变成 $FORK_URL（分支 $BRANCH）的 git 检出"
+    echo "    保留    ：data/ generated/ .venv313/ services/*/bin（未跟踪文件）"
+    echo "    替换    ：$BRANCH 中所有被跟踪的文件"
     if [ "$DO_BACKUP" = "1" ]; then
-        echo "    backup  : ${ROOT}.bak.<timestamp>"
+        echo "    备份至  ：${ROOT}.bak.<时间戳>"
     else
-        warn "backup disabled with --no-backup"
+        warn "已通过 --no-backup 关闭备份"
     fi
     if [ "$ASSUME_YES" != "1" ]; then
-        read -r -p "continue? [y/N] " answer
-        case "$answer" in y|Y|yes) ;; *) die "aborted" ;; esac
+        read -r -p "是否继续？[y/N] " answer
+        case "$answer" in y|Y|yes) ;; *) die "已取消" ;; esac
     fi
 
-    cd "$ROOT" || die "cannot enter $ROOT"
+    cd "$ROOT" || die "无法进入 $ROOT"
 
     if [ "$DO_BACKUP" = "1" ]; then
         local stamp
         stamp=$(date +%F-%H%M%S)
-        log "panel backup"
-        bash services/panel/backup.sh || warn "panel backup failed (is the panel running?)"
-        log "full snapshot to ${ROOT}.bak.${stamp}"
-        [ -e "${ROOT}.bak.${stamp}" ] || cp -a "$ROOT" "${ROOT}.bak.${stamp}" || die "snapshot failed"
-        echo "    rollback: systemctl stop hiddify-panel; rm -rf $ROOT; mv ${ROOT}.bak.${stamp} $ROOT; systemctl start hiddify-panel"
+        log "面板备份"
+        bash services/panel/backup.sh || warn "面板备份失败（面板是否在运行？）"
+        log "完整快照到 ${ROOT}.bak.${stamp}"
+        [ -e "${ROOT}.bak.${stamp}" ] || cp -a "$ROOT" "${ROOT}.bak.${stamp}" || die "快照失败"
+        echo "    回滚方法：systemctl stop hiddify-panel; rm -rf $ROOT; mv ${ROOT}.bak.${stamp} $ROOT; systemctl start hiddify-panel"
     fi
 
     log "git init"
@@ -121,46 +120,46 @@ switch_to_fork() {
     git remote add upstream "$UPSTREAM_URL" 2>/dev/null || true
     add_safe_directories
 
-    log "fetching $BRANCH from your fork"
-    git fetch --prune origin "$BRANCH" || die "could not fetch $FORK_URL ($BRANCH)"
-    # keep it: fetching upstream below overwrites FETCH_HEAD
+    log "正在从你的 fork 拉取 $BRANCH"
+    git fetch --prune origin "$BRANCH" || die "无法拉取 $FORK_URL（$BRANCH）"
+    # 先记下来：后面拉取 upstream 会覆盖 FETCH_HEAD
     local fork_commit
     fork_commit=$(git rev-parse FETCH_HEAD)
-    git fetch --prune upstream "$BASE" >/dev/null 2>&1 || warn "could not fetch upstream $BASE (diff will be skipped)"
+    git fetch --prune upstream "$BASE" >/dev/null 2>&1 || warn "无法拉取上游 $BASE（将跳过差异对比）"
 
-    log "checking out $BRANCH (tracked files only)"
-    git reset --hard "$fork_commit" || die "checkout failed"
+    log "检出 $BRANCH（仅跟踪的文件）"
+    git reset --hard "$fork_commit" || die "检出失败"
     git branch -m "$BRANCH" >/dev/null 2>&1 || true
     git branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
 
-    # a release install has services/panel/src as a plain directory, git wants a submodule there
+    # release 安装里的 services/panel/src 是普通目录，git 需要它是子模块
     if [ -d services/panel/src ] && [ ! -e services/panel/src/.git ]; then
-        warn "moving the release copy of services/panel/src aside"
+        warn "正在把 release 版本的 services/panel/src 移开"
         mv services/panel/src services/panel/src.release-backup
-        echo "    you can delete it once everything works: rm -rf services/panel/src.release-backup"
+        echo "    一切正常后可删除：rm -rf services/panel/src.release-backup"
     fi
     git branch -m "$BRANCH" >/dev/null 2>&1 || true
     git branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
 
     if [ -n "$PANEL_REPO" ]; then
-        log "pointing the panel submodule at ${PANEL_REPO}"
+        log "把面板子模块指向 ${PANEL_REPO}"
         sed -i "s#https://github.com/hiddify/Hiddify-Panel.git#https://github.com/${PANEL_REPO}.git#" .gitmodules
         git submodule sync --recursive
     fi
 
-    log "submodules"
+    log "子模块"
     add_safe_directories
     git submodule update --init --recursive || {
-        # a submodule cloned above is a repository of its own: add it and retry
+        # 上面克隆的子模块本身就是一个独立仓库：补加例外后重试
         add_safe_directories
-        git submodule update --init --recursive || die "submodule update failed"
+        git submodule update --init --recursive || die "子模块更新失败"
     }
 
-    log "what differs from the official $BASE:"
+    log "与官方 $BASE 的差异如下："
     git --no-pager diff --stat "upstream/$BASE...HEAD" 2>/dev/null ||
-        { git --no-pager log --oneline -3; echo "    (upstream/$BASE not fetched, showing recent commits only)"; }
+        { git --no-pager log --oneline -3; echo "    （未拉取 upstream/$BASE，仅显示最近提交）"; }
 
-    log "applying (reinstalls the services, takes a few minutes)"
+    log "正在应用（会重装服务，需要几分钟）"
     export HIDDIFY_NO_HTTP_API=true
     if command -v make >/dev/null 2>&1; then
         make build
@@ -170,17 +169,17 @@ switch_to_fork() {
     return $?
 }
 
-# --- main ------------------------------------------------------------------------
-[ "$(id -u)" = "0" ] || die "run as root (sudo -i)"
-[ -d "$ROOT" ] || die "$ROOT does not exist"
+# --- 主流程 ----------------------------------------------------------------------
+[ "$(id -u)" = "0" ] || die "请以 root 身份运行（sudo -i）"
+[ -d "$ROOT" ] || die "$ROOT 不存在"
 command -v git >/dev/null 2>&1 || {
-    log "installing git"
-    apt-get update -qq && apt-get install -y git || die "could not install git"
+    log "正在安装 git"
+    apt-get update -qq && apt-get install -y git || die "无法安装 git"
 }
 
 rc=0
 if [ -e "$ROOT/.git" ]; then
-    log "$ROOT is already a git checkout, updating from git"
+    log "$ROOT 已是 git 检出，改为从 git 更新"
     update_from_git
     rc=$?
 else
@@ -190,13 +189,13 @@ fi
 
 echo
 if [ "$rc" = "0" ]; then
-    log "done"
+    log "完成"
     systemctl is-active hiddify-panel >/dev/null 2>&1 &&
-        log "hiddify-panel is running" ||
-        warn "hiddify-panel is not running: systemctl status hiddify-panel"
-    echo "from now on update with:  cd $ROOT && scripts/update.sh"
-    echo "or one line:             bash $ROOT/scripts/switch_to_fork.sh"
+        log "hiddify-panel 正在运行" ||
+        warn "hiddify-panel 未运行：systemctl status hiddify-panel"
+    echo "今后更新请执行：  cd $ROOT && scripts/update.sh"
+    echo "或一行命令：      bash $ROOT/scripts/switch_to_fork.sh"
 else
-    warn "finished with errors (exit $rc), check the log above"
+    warn "执行出错（退出码 $rc），请查看上方日志"
 fi
 exit $rc

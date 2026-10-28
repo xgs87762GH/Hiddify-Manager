@@ -10,6 +10,7 @@
 #   B  the manager is already up to date but the panel is behind -> must sync
 #   C  a panel-only bump (outer commit moving just the submodule pointer)
 #   D  the server still has an older update.sh -> it must hand over and work
+#   E  a local commit diverged from the remote -> ff-only must refuse, work kept
 #
 # Every scenario must leave HEAD on origin/dev-custom and the panel checkout on
 # the commit the pointer asks for.
@@ -197,6 +198,32 @@ scenario_c() {
     assert_submodule_synced
 }
 
+scenario_e() {
+    log "E: local commit diverged -> ff-only must refuse and keep the local work"
+    # 远端前进一格
+    echo "remote" > "$WORK/manager/REMOTE_MARKER"
+    git -C "$WORK/manager" add REMOTE_MARKER
+    git -C "$WORK/manager" commit -qm "remote moved on"
+    git -C "$WORK/manager" push -q "$MGR_ORIGIN" HEAD:refs/heads/dev-custom
+    # 服务器本地也提交一格，形成分叉
+    echo "local hotfix" > "$ROOT/LOCAL_HOTFIX"
+    git -C "$ROOT" add LOCAL_HOTFIX
+    git -C "$ROOT" commit -qm "local hotfix"
+    local out local_sha
+    local_sha=$(git -C "$ROOT" rev-parse HEAD)
+    out=$(run_update)
+    echo "$out" | sed 's/^/    | /'
+    echo "$out" | grep -q "FAKE BACKUP" || bad "backup did not run before the refusal"
+    echo "$out" | grep -q "无法快进" || bad "update.sh did not stop on a non-fast-forward"
+    [ -f "$ROOT/LOCAL_HOTFIX" ] || bad "the local commit was destroyed"
+    [ "$(git -C "$ROOT" rev-parse HEAD)" = "$local_sha" ] ||
+        bad "HEAD moved away from the local commit"
+    [ "$(git -C "$MGR_ORIGIN" rev-parse dev-custom)" != "$(git -C "$ROOT" rev-parse HEAD)" ] ||
+        bad "HEAD silently jumped onto the remote tip"
+    ok "local commit preserved, update refused"
+    # 不在收尾 reset：scenario_d 的 clone_server 会整体重建 $ROOT
+}
+
 scenario_d() {
     # The situation of a server installed before these fixes: its own update.sh
     # knows nothing about the safe.directory handling, so the first run can only
@@ -262,6 +289,7 @@ run_once() {
     scenario_a
     scenario_b
     scenario_c
+    scenario_e
     scenario_d
     if [ "$fail_count" = "$before" ]; then
         pass_count=$((pass_count + 1))

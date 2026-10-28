@@ -2,6 +2,7 @@ source /opt/hiddify-manager/scripts/common/utils.sh
 source /opt/hiddify-manager/services/warp/utils.sh
 ensure_warp_data_links singbox "$(pwd)"
 
+# 首次运行时从 GitHub 下载 wgcf（用于生成 WARP 账户）
 if ! [ -f "wgcf-account.toml" ];then
     # mv wgcf-account.toml wgcf-account.toml.backup
     TAR="https://api.github.com/repos/ViRb3/wgcf/releases/latest"
@@ -16,6 +17,7 @@ ARCHITECTURE=$(dpkg --print-architecture)
 
 
 
+# 从 GitLab 取 warp-go 最新版本号，取不到时回退到 1.0.8
 latest=$(curl --connect-timeout 10 -q https://gitlab.com/api/v4/projects/ProjectWARP%2Fwarp-go/releases | awk -F '"' '{for (i=0; i<NF; i++) if ($i=="tag_name") {print $(i+2); exit}}' | sed "s/v//")
 latest=${latest:-'1.0.8'}
 curl --connect-timeout 10 -o /tmp/warp-go.tar.gz https://raw.githubusercontent.com/fscarmen/warp/main/warp-go/warp-go_"$latest"_linux_"$ARCHITECTURE".tar.gz

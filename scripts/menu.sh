@@ -7,16 +7,16 @@ function hiddify_bashrc_has_autostart() {
     grep -qE '/opt/hiddify-(manager|config|server)/(scripts/)?menu\.sh|^[[:space:]]*hiddify[[:space:]]*$' ~/.bashrc 2>/dev/null
 }
 
-# A commented `# hiddify` line means the user turned the menu off. Do not rewrite it.
+# .bashrc 里 `# hiddify` 被注释掉表示用户主动关闭了菜单，不要覆盖它。
 if hiddify_bashrc_has_autostart && ! hiddify_bashrc_menu_disabled; then
     hiddify_bashrc_enable_menu
 fi
 
 
 if ! grep -rxq "PasswordAuthentication.*no" /etc/ssh/sshd*; then
-    # @hiddify/@iam54r1n4 make a better message with a link to why should disable pass-auth
-    WARNING_MSG="Your server is vulnerable to abuses because PasswordAuthentication is enabled. To secure your server, please switch to key authentication mechanism and turn off PasswordAuthentication in your ssh config file."
-    whiptail --title "WARNING" --msgbox "$WARNING_MSG" 10 78
+    # 提示用户关闭密码登录：密码认证容易被暴力破解
+    WARNING_MSG="当前服务器开启了 SSH 密码登录，存在被滥用的风险。建议改用密钥登录，并在 ssh 配置中关闭 PasswordAuthentication。"
+    whiptail --title "警告" --msgbox "$WARNING_MSG" 10 78
 fi
 #PACKAGE_MODE=$(get_package_mode)
 #LATEST_CONFIG_VERSION=$(get_release_version hiddify-manager)
@@ -41,16 +41,17 @@ function menu() {
     CHOICE_HEIGHT=12
     BACKTITLE="Hiddify Manager (Config=v$CURRENT_CONFIG_VERSION Panel=v$CURRENT_PANEL_VERSION)   $UPDATE_NEED  "
     TITLE="Hiddify Manager $PACKAGE_MODE"
-    MENU="Choose one of the following options:"
+    MENU="请选择操作："
 
-    OPTIONS=(status "View status of system"
-        admin "Show admin link"
-        log "view system logs"
-        restart "Restart Services without changing the configs"
-        install "Reinstall the server"
-        update "Update $UPDATE_NEED"
-        advanced "Uninstall, Remote Assistant, Downgrade,..."
-        Quit ""
+    # 左侧是 case 匹配用的键名，不要修改；右侧是可读描述。
+    OPTIONS=(status "查看系统状态"
+        admin "显示管理员链接"
+        log "查看系统日志"
+        restart "重启服务（不修改配置）"
+        install "重新安装服务端"
+        update "更新 $UPDATE_NEED"
+        advanced "卸载、远程协助、降级……"
+        Quit "退出"
     )
 
     CHOICE=$(whiptail --clear \
@@ -66,7 +67,7 @@ function menu() {
         exit 1
     fi
     clear
-    echo "Hiddify: Command $CHOICE"
+    echo "Hiddify：执行命令 $CHOICE"
     echo "=========================================="
     NEED_KEY=1
     case $CHOICE in
@@ -88,20 +89,20 @@ function menu() {
         clear
         echo -e "\033[0m"
         if [[ $LOG != "" ]]; then
-            less -r -P"Press q to exit" +G "data/log/$LOG"
+            less -r -P"按 q 退出" +G "data/log/$LOG"
         fi
         NEED_KEY=0
         ;;
     "advanced")
         OPTIONS=(
-            warp "Check Warp Status"
-            add_remote "Add remote assistant access to this server"
-            remove_remote "Remove remote assistant access to this server"
-            enable "show this menu on start up"
-            disable "disable this menu"
-            uninstall "Uninstall hiddify :("
-            purge "Uninstall completely and remove database :("
-            Back ""
+            warp "查看 WARP 状态"
+            add_remote "为该服务器开启远程协助"
+            remove_remote "移除该服务器的远程协助"
+            enable "开机时显示本菜单"
+            disable "关闭本菜单"
+            uninstall "卸载 Hiddify :("
+            purge "彻底卸载并删除数据库 :("
+            Back "返回"
         )
         CHOICE=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE" --menu "$MENU" $HEIGHT $WIDTH $CHOICE_HEIGHT "${OPTIONS[@]}" 3>&1 1>&2 2>&3)
         case $CHOICE in
@@ -128,7 +129,7 @@ function menu() {
         "warp")
             (
                 cd services/warp/
-                bash status.sh | less -r -P"Press q to exit" +G
+                bash status.sh | less -r -P"按 q 退出" +G
             )
             NEED_KEY=0
             ;;
@@ -137,10 +138,10 @@ function menu() {
         ;;
 
     "update")
-        OPTIONS=(default "Based on the configuration in panel"
-                release "stable (suggested) $UPDATE_NEED"
-                beta "pre-release version - may have bugs"
-                Back ""
+        OPTIONS=(default "按面板中的配置决定"
+                release "稳定版（推荐）$UPDATE_NEED"
+                beta "预发布版 —— 可能存在缺陷"
+                Back "返回"
         )
         CHOICE=$(whiptail --clear --backtitle "$BACKTITLE" --title "$TITLE" --menu "$MENU" $HEIGHT $WIDTH $CHOICE_HEIGHT "${OPTIONS[@]}" 3>&1 1>&2 2>&3)
         case $CHOICE in
@@ -162,17 +163,17 @@ function menu() {
     "admin")
         source /opt/hiddify-manager/scripts/common/utils.sh
         check_hiddify_panel
-        echo "Hint: hiddify admin    |    hiddify reset-password"
-        read -p "Press 'r' to reset admin password or press any other key to return to the main menu: " -n 1 key
-        echo  # This adds a newline for better output readability
+        echo "提示：hiddify admin    |    hiddify reset-password"
+        read -p "按 'r' 重置管理员密码，按其他任意键返回主菜单：" -n 1 key
+        echo  # 换行，便于阅读后续输出
         if [[ "$key" == 'r' ]]; then
-            echo "reseting owner password..."
+            echo "正在重置所有者密码……"
             hiddify-panel-cli reset-owner-password
         fi
         NEED_KEY=0
         ;;
     "status")
-        bash /opt/hiddify-manager/scripts/status.sh | less -r -P"Press q to exit" +G
+        bash /opt/hiddify-manager/scripts/status.sh | less -r -P"按 q 退出" +G
         NEED_KEY=0
         ;;
     *)
@@ -181,7 +182,7 @@ function menu() {
     esac
 
     if [[ $NEED_KEY == 1 ]]; then
-        read -p "Press any key to return to menu" -n 1 key
+        read -p "按任意键返回菜单" -n 1 key
     fi
 
     menu

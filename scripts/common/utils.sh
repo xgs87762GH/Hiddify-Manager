@@ -3,16 +3,16 @@ export HIDDIFY_SCRIPTS="$HIDDIFY_DIR/scripts"
 export HIDDIFY_SERVICES="$HIDDIFY_DIR/services"
 export HIDDIFY_DATA="$HIDDIFY_DIR/data"
 export HIDDIFY_GENERATED="$HIDDIFY_DIR/generated"
-# Locks are runtime state: tmpfs (/run), never in data/ (backups, restores, a copied server)
+# 锁属于运行期状态：放在 tmpfs（/run），绝不能放 data/
+#（会被备份、恢复、整机拷贝带走）。
 export HIDDIFY_LOCKS="/run/hiddify/locks"
-# Single source of truth for the panel's durable config — must match the default
-# baked into hiddifypanel/__init__.py and base.py.
+# 面板持久化配置的唯一来源——必须与 hiddifypanel/__init__.py 和 base.py 里的默认值一致。
 export HIDDIFY_PANEL_CFG_PATH="$HIDDIFY_DATA/hiddify-panel/app.cfg"
 export venv_path="/opt/hiddify-manager/.venv313"
 
-# Backups are full database dumps (secrets, user ids): owned by the panel user, not world-readable.
-# hiddify-panel-cli backup runs as hiddify-panel, so a root-owned dir (e.g. left by a panel run
-# as root) makes every backup fail with "Permission denied".
+# 备份是完整数据库导出（含密钥、用户 ID）：属主为面板用户，且不可被其他人读取。
+# hiddify-panel-cli backup 以 hiddify-panel 身份运行，因此 root 属主的目录
+#（例如面板曾以 root 运行留下）会让每次备份都报 "Permission denied"。
 function ensure_panel_backup_dir() {
     local dir="$HIDDIFY_DATA/backup"
     mkdir -p "$dir"
@@ -31,9 +31,9 @@ function ensure_service_group() {
     done
 }
 
-# generated/ is owned by hiddify-panel and group hiddify-common.
-# Directories stay searchable (setgid 2770). Config files are 660 so the panel
-# can rewrite them and every service account in the group can read them.
+# generated/ 的属主是 hiddify-panel，属组是 hiddify-common。
+# 目录保持可进入（setgid 2770）；配置文件为 660，这样面板能改写，
+# 同时组内各服务账号都能读取。
 function ensure_generated_permissions() {
     ensure_service_group
     mkdir -p "$HIDDIFY_GENERATED/client" "$HIDDIFY_GENERATED/include"
@@ -42,8 +42,8 @@ function ensure_generated_permissions() {
     find "$HIDDIFY_GENERATED" -type f -exec chmod 660 {} \;
 }
 
-# data/cert: the certificates HAProxy serves. The panel writes them from its database (hiddifypanel/acme/store.py):
-# owned by hiddify-panel, group hiddify-common (setgid, so new files get it), files 640.
+# data/cert：HAProxy 实际使用的证书。由面板根据数据库写入（hiddifypanel/acme/store.py）：
+# 属主 hiddify-panel、属组 hiddify-common（setgid，新建文件自动继承），文件权限 640。
 function ensure_cert_dir() {
     local dir="$HIDDIFY_DATA/cert"
     mkdir -p "$dir"
@@ -55,22 +55,22 @@ function ensure_cert_dir() {
     find "$dir" -type f -exec chmod 640 {} + 2>/dev/null || true
 }
 
-# Logs were in data/log/system (before v14): move them up to data/log. A running service keeps writing to its moved file
-# (same file system) until its unit, now pointing to data/log, is restarted.
+# v14 之前的日志放在 data/log/system：把它们上移到 data/log。正在运行的服务在服务重启
+#（新单元已指向 data/log）之前，会继续写自己那个已被移动的文件（同一文件系统）。
 function migrate_log_dir() {
     local old="$HIDDIFY_DATA/log/system"
     [ -d "$old" ] && [ ! -L "$old" ] || return 0
     local entry
     for entry in "$old"/* "$old"/.[!.]*; do
         [ -e "$entry" ] || continue
-        # mv keeps the inode: writers holding it open go on writing to it at its new place
+        # mv 保持 inode 不变：持有该文件句柄的进程会继续写到它的新位置
         [ -e "$HIDDIFY_DATA/log/${entry##*/}" ] || mv "$entry" "$HIDDIFY_DATA/log/"
     done
     rm -rf "$old"
 }
 
 function ensure_hiddify_data_dirs() {
-    # Shared permanent paths only. Each service creates its own data dirs.
+    # 只处理各服务共用的固定路径；各服务的私有数据目录由各自创建。
     mkdir -p \
         "$HIDDIFY_DATA/log" \
         "$HIDDIFY_GENERATED/client" \
@@ -81,9 +81,8 @@ function ensure_hiddify_data_dirs() {
     ensure_generated_permissions
 }
 
-# The startup menu is one line in bashrc. Turning it off comments that line
-# (`# hiddify`). Installation must leave the comment in place and not append
-# `hiddify` again.
+# 开机菜单就是 bashrc 里的一行。关闭它就是把该行注释掉（`# hiddify`）。
+# 安装时必须保留这条注释，不能又追加一次 `hiddify`。
 
 function hiddify_bashrc_menu_disabled() {
     local bashrc="${1:-$HOME/.bashrc}"
@@ -125,7 +124,7 @@ function hiddify_bashrc_enable_menu() {
     fi
 }
 
-# Append the startup line only when the user has not commented it out.
+# 仅当用户没有把启动行注释掉时才追加。
 function hiddify_bashrc_install_menu() {
     local bashrc="${1:-$HOME/.bashrc}"
     touch "$bashrc"
@@ -138,59 +137,57 @@ function hiddify_bashrc_install_menu() {
     fi
 }
 
-# Usage: hiddify_random_password [length]  (default 49)
+# 用法：hiddify_random_password [长度]（默认 49）
 function hiddify_random_password() {
     local len="${1:-49}"
     < /dev/urandom tr -dc 'a-zA-Z0-9' | head -c "$len"
     echo
 }
 
-# ALL version queries and downloads go to YOUR fork, never the official org.
-# Override if needed:
+# 所有版本查询与下载都指向你自己的 fork，绝不走官方组织。
+# 需要时可覆盖：
 #   export HIDDIFY_GITHUB_USER="yourname"
 #   export HIDDIFY_MANAGER_REPO="yourname/Hiddify-Manager"
 #   export HIDDIFY_PANEL_REPO="yourname/hiddifypanel"
 : "${HIDDIFY_GITHUB_USER:=xgs87762GH}"
 : "${HIDDIFY_MANAGER_REPO:=${HIDDIFY_GITHUB_USER}/Hiddify-Manager}"
 : "${HIDDIFY_PANEL_REPO:=${HIDDIFY_GITHUB_USER}/hiddifypanel}"
-# Customized branches for develop installs / commit-date probes (never upstream-synced main/dev).
+# 开发版安装 / 提交日期探测使用的定制分支（绝不是与上游同步的 main/dev）。
 : "${HIDDIFY_MANAGER_BRANCH:=dev-custom}"
 : "${HIDDIFY_PANEL_BRANCH:=dev-custom}"
 
-# git refuses to touch a repository owned by another user ("dubious ownership"),
-# and the exception is per repository directory, never recursive: the manager
-# checkout is written by root and by hiddify-panel, and the panel submodule (and
-# what it nests) is its own repository and needs its own exception. Call this
-# before any git command that may reach a submodule, or the update stops with
-# "Unable to find current revision in submodule path".
+# git 会拒绝操作属于其他用户的仓库（"dubious ownership"），而该例外是按仓库目录
+# 生效、不会递归：manager 检出会被 root 和 hiddify-panel 同时写入，面板子模块
+#（以及它内部嵌套的仓库）各自都是独立仓库，需要各自加例外。任何可能触及子模块的
+# git 命令之前都要调用本函数，否则更新会停在
+# "Unable to find current revision in submodule path"。
 function add_safe_directory() {
     local dir="${1%/}"
     [[ -n "$dir" ]] || return 0
     git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" && return 0
     git config --global --add safe.directory "$dir" >/dev/null 2>&1 ||
-        warning "could not add safe.directory $dir (run as root?)"
+        warning "无法添加 safe.directory $dir（是否以 root 身份运行？）"
 }
 
 function add_safe_directories() {
     local d
-    # Always mark the manager + panel submodule first. A pipe+while subshell used
-    # to skip these when submodule foreach itself died on dubious ownership.
+    # 先标记 manager 和面板子模块。以前用管道 + while 子 shell，一旦 submodule
+    # foreach 本身因 dubious ownership 失败，这两项就会被跳过。
     add_safe_directory "$HIDDIFY_DIR"
     add_safe_directory "$HIDDIFY_DIR/services/panel/src"
     while IFS= read -r d; do
         [[ -n "$d" ]] || continue
         add_safe_directory "$HIDDIFY_DIR/$d"
     done < <(
-        # declared submodules, readable before any of them is initialized
+        # 已声明的子模块：在任何一个被初始化之前就能读到
         git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
-        # nested ones, only visible once their parent is checked out
+        # 嵌套子模块：父模块检出后才可见
         git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
     )
 }
 
-# Map the legacy upstream repo names used by the callers (hiddify-panel,
-# Hiddify-Panel, hiddify-manager, ...) to your fork repositories, so every
-# version check and download is served by the fork, not by hiddify/*.
+# 把调用方使用的旧上游仓库名（hiddify-panel、Hiddify-Panel、hiddify-manager……）
+# 映射到你 fork 的仓库，确保每次版本检查和下载都由 fork 提供，而不是 hiddify/*。
 function fork_repo() {
     local name
     name=$(echo "$1" | tr '[:upper:]' '[:lower:]')
@@ -201,7 +198,7 @@ function fork_repo() {
     esac
 }
 
-# Default develop branch for a repo name (panel vs manager).
+# 按仓库名（面板 / manager）返回默认的开发分支。
 function fork_dev_branch() {
     local name
     name=$(echo "$1" | tr '[:upper:]' '[:lower:]')
@@ -211,10 +208,11 @@ function fork_dev_branch() {
     esac
 }
 
-# The version of a dev install: the date of the newest commit of a branch, as MM-DDTHH:MM (UTC).
-# Defaults to YOUR customized branch (HIDDIFY_*_BRANCH), not upstream-synced `dev`.
-# GitHub's commits page changes its JSON (the commits moved under .payload.commitsRefRoute), and a path that no longer
-# exists gave "null" and an empty VERSION. So try that page, its Atom feed and the API in turn, and only take a date.
+# 开发版安装的版本号：分支上最新提交的日期，格式 MM-DDTHH:MM（UTC）。
+# 默认使用你定制的分支（HIDDIFY_*_BRANCH），而不是与上游同步的 `dev`。
+# GitHub 的 commits 页面改过 JSON 结构（提交被挪到 .payload.commitsRefRoute 下），
+# 旧路径会解析出 "null" 和空 VERSION。因此依次尝试该页面、它的 Atom 源和 API，
+# 且只从中取日期。
 function get_commit_version() {
     local repo="$1" branch="${2:-$(fork_dev_branch "$1")}" date="" page fork
     fork=$(fork_repo "$repo")
@@ -227,11 +225,11 @@ function get_commit_version() {
         date=$(curl -sL -m 20 "https://api.github.com/repos/$fork/commits/$branch" | jq -r '.commit.committer.date // empty' 2>/dev/null)
     fi
     if ! [[ "$date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]; then
-        echo "Could not read the latest commit date of $repo ($branch) from GitHub" >&2
+        echo "无法从 GitHub 读取 $repo（$branch）的最新提交日期" >&2
         return 1
     fi
-    # In UTC: the page gives the committer's offset (+03:30), the feed and the API give Z; update.sh compares this with
-    # the installed VERSION, so every source must give the same text for the same commit.
+    # 统一转成 UTC：页面给出的是提交者时区偏移（+03:30），Atom 源和 API 给的是 Z；
+    # update.sh 会拿它与已安装的 VERSION 比较，所以同一提交在各来源必须得到相同文本。
     local utc
     utc=$(date -u -d "$date" +%Y-%m-%dT%H:%M 2>/dev/null) && date="$utc"
     echo "${date:5:11}"
@@ -265,7 +263,7 @@ function get_release_version() {
 
 function hiddifypanel_path() {
     activate_python_venv
-    timeout 15 /opt/hiddify-manager/.venv313/bin/python -c "import os,hiddifypanel;print(os.path.dirname(hiddifypanel.__file__),end='')" 2>&1 || echo "panel is not installed yet."
+    timeout 15 /opt/hiddify-manager/.venv313/bin/python -c "import os,hiddifypanel;print(os.path.dirname(hiddifypanel.__file__),end='')" 2>&1 || echo "面板尚未安装。"
 }
 function get_installed_panel_version() {
     activate_python_venv
@@ -309,19 +307,19 @@ function get_pretty_service_status() {
 	fi
 }
 function add_DNS_if_failed() {
-    # Domain to check
+    # 用于检测的域名
     DOMAIN="yahoo.com"
 
-    # Use dig to resolve the domain
+    # 用 dig 解析该域名
     dig +short $DOMAIN >/dev/null 2>&1
 
-    # Check the exit status of the dig command
+    # 检查 dig 的退出码
     if [ $? -ne 0 ]; then
-        echo "Dig failed to resolve $DOMAIN! Adding nameserver 8.8.8.8 to /etc/resolv.conf..."
-        # Check if 8.8.8.8 is already in the file to avoid appending it multiple times
+        echo "dig 无法解析 $DOMAIN！正在向 /etc/resolv.conf 添加 nameserver 8.8.8.8……"
+        # 先检查 8.8.8.8 是否已存在，避免重复追加
         grep -q "8.8.8.8" /etc/resolv.conf || echo "nameserver 8.8.8.8" | sudo tee -a /etc/resolv.conf
         # else
-        # echo "Dig resolved $DOMAIN successfully!"
+        # echo "dig 成功解析 $DOMAIN！"
     fi
 
 }
@@ -343,10 +341,10 @@ function update_progress() {
 }
 
 function restart_hiddify_panel() {
-    # Finish apply/install work (including progress 100) before calling this.
-    # ``systemctl kill`` / a blocking restart SIGTERMs every process in the
-    # hiddify-panel cgroup. apply must run outside that cgroup (commander.py
-    # uses systemd-run) and restart here must be --no-block.
+    # 调用它之前必须先完成 apply/install 的工作（包括进度 100）。
+    # ``systemctl kill`` / 阻塞式 restart 会给 hiddify-panel cgroup 里的每个进程
+    # 发 SIGTERM。apply 必须在该 cgroup 之外运行（commander.py 用 systemd-run），
+    # 而这里的 restart 必须带 --no-block。
     if ! command -v systemctl >/dev/null 2>&1; then
         return 0
     fi
@@ -365,14 +363,14 @@ function is_installed_pypi_package() {
         if pip list --format=freeze | grep -E "^$package_name" >/dev/null; then
             return 0
         else
-            echo "Package $package_name is not installed."
+            echo "Python 包 $package_name 未安装。"
             return 1
         fi
     else 
         if uv pip list --format=freeze | grep -E "^$package_name" >/dev/null; then
             return 0
         else
-            echo "Package $package_name is not installed."
+            echo "Python 包 $package_name 未安装。"
             return 1
         fi
     fi
@@ -393,26 +391,24 @@ function install_pypi_package() {
 function is_installed_package() {
     package_spec="$1"
 
-    # Extract package name and version from the package specification
+    # 从 "包名=版本" 形式的规格里拆出包名和版本
     package_name=$(echo "$1" | cut -d'=' -f1)
     version=$(echo "$1" | cut -s -d'=' -f2)
     if dpkg -l | grep -qE "^ii  $package_name *$version"; then
         return 0
     else
-        echo "$package_name version $version is not installed."
+        echo "$package_name 版本 $version 未安装。"
         return 1
     fi
 }
 install_package() {
-    # scripts/install.sh installs scripts/common, services/redis and
-    # services/mysql in parallel, so several apt runs would otherwise start at
-    # once and all but one fail on the dpkg lock. The failure path below then
-    # repairs them out of order, which can leave a package unpacked but
-    # unconfigured and run its postinst long after the service's own install
-    # script finished — for mariadb-server that postinst re-initializes the
-    # datadir and wipes the panel DB user services/mysql/install.sh just
-    # created. The lock also covers the is-installed check, so a second run
-    # cannot decide to install what the first one is already installing.
+    # scripts/install.sh 会并行安装 scripts/common、services/redis 和
+    # services/mysql，否则多个 apt 会同时启动，除一个之外全部因 dpkg 锁失败。
+    # 随后的失败处理又会乱序修补它们，可能留下已解包但未配置的包，让它的
+    # postinst 在该服务自己的安装脚本结束很久之后才运行 —— 对 mariadb-server
+    # 来说，那个 postinst 会重新初始化 datadir，并清掉 services/mysql/install.sh
+    # 刚创建的面板数据库用户。这把锁也覆盖"是否已安装"的检查，因此第二次运行
+    # 不会决定去安装第一次正在安装的包。
     (
         flock 9
         local not_installed_packages=""
@@ -420,7 +416,7 @@ install_package() {
 
         for package in "$@"; do
             if ! is_installed_package "$package"; then
-                # The package is not installed, add it to the list
+                # 该包未安装，加入待安装列表
                 not_installed_packages+=" $package"
             fi
         done
@@ -428,11 +424,11 @@ install_package() {
         if [ -n "$not_installed_packages" ]; then
             apt-get install -y --no-install-recommends $not_installed_packages
 
-            # Check if installation failed
+            # 检查安装是否失败
             if [ $? -ne 0 ]; then
                 apt --fix-broken install -y
                 apt-get update
-                #retries for 3 times
+                # 最多重试 3 次
                 apt-get install -y $not_installed_packages ||apt-get install -y $not_installed_packages||apt-get install -y $not_installed_packages
 
             fi
@@ -448,11 +444,11 @@ function remove_package() {
     done
 }
 
-# --- Admin V2 UI (Vue) -------------------------------------------------------
-# The built UI (hiddifypanel/static/admin-v2/) is not in git. Release/beta wheels
-# ship it prebuilt (release workflow); every install from source builds it here.
+# --- 管理端 V2 界面（Vue）----------------------------------------------------
+# 构建后的界面（hiddifypanel/static/admin-v2/）不在 git 中。release/beta 的 wheel
+# 由发布流程预先构建好并随包提供；从源码安装时则在这里构建。
 
-# The panel repo default (your fork) is set near the top of this file:
+# 面板仓库的默认值（你的 fork）定义在本文件开头：
 #   : "${HIDDIFY_PANEL_REPO:=${HIDDIFY_GITHUB_USER}/hiddifypanel}"
 HIDDIFY_PANEL_GIT_URL="https://github.com/${HIDDIFY_PANEL_REPO}"
 
@@ -462,11 +458,11 @@ function _node_major() {
 }
 
 
-# Node.js for building the admin UI only. The system's node is used when it is new
-# enough; otherwise the official prebuilt Node goes into a private directory (no apt
-# packages: Ubuntu 22.04's nodejs 12/libnode conflicts with newer node packages).
+# 仅用于构建管理端界面的 Node.js。系统自带的 node 版本足够新时直接用它；
+# 否则把官方预编译的 Node 装到私有目录（不用 apt 包：Ubuntu 22.04 的
+# nodejs 12/libnode 与新版 node 包冲突）。
 HIDDIFY_NODE_VERSION="${HIDDIFY_NODE_VERSION:-22.23.3}"
-# npm for that private Node (newer than the one bundled with it); needs node ^22.22.2.
+# 给这个私有 Node 用的 npm（比它自带的更新）；要求 node ^22.22.2。
 HIDDIFY_NPM_VERSION="${HIDDIFY_NPM_VERSION:-12.1.0}"
 HIDDIFY_NODE_MIRRORS="${HIDDIFY_NODE_MIRRORS:-https://nodejs.org/dist https://npmmirror.com/mirrors/node}"
 
@@ -481,7 +477,7 @@ function _node_arch() {
 
 function _download_nodejs() {
     local arch dir name mirror tmp
-    arch=$(_node_arch) || { error "No prebuilt Node.js for CPU $(uname -m)" >&2; return 1; }
+    arch=$(_node_arch) || { error "没有适用于 CPU $(uname -m) 的预编译 Node.js" >&2; return 1; }
     name="node-v${HIDDIFY_NODE_VERSION}-linux-${arch}"
     dir="$HIDDIFY_DIR/.cache/nodejs/$name"
     if [ -x "$dir/bin/node" ]; then
@@ -491,7 +487,7 @@ function _download_nodejs() {
     install_package curl xz-utils ca-certificates >/dev/null 2>&1
     tmp=$(mktemp -d /var/tmp/hiddify-node.XXXXXX) || return 1
     for mirror in $HIDDIFY_NODE_MIRRORS; do
-        warning "Downloading Node.js v${HIDDIFY_NODE_VERSION} from ${mirror} (only to build the admin UI)..." >&2
+        warning "正在从 ${mirror} 下载 Node.js v${HIDDIFY_NODE_VERSION}（仅用于构建管理端界面）……" >&2
         if curl -fsSL --retry 2 --connect-timeout 15 -o "$tmp/$name.tar.xz" "$mirror/v${HIDDIFY_NODE_VERSION}/$name.tar.xz" &&
             curl -fsSL --retry 2 --connect-timeout 15 -o "$tmp/SHASUMS256.txt" "$mirror/v${HIDDIFY_NODE_VERSION}/SHASUMS256.txt" &&
             (cd "$tmp" && grep " $name.tar.xz\$" SHASUMS256.txt | sha256sum -c --status); then
@@ -503,7 +499,7 @@ function _download_nodejs() {
                 return 0
             fi
         fi
-        warning "Node.js download from ${mirror} failed or did not verify" >&2
+        warning "从 ${mirror} 下载 Node.js 失败或校验未通过" >&2
         rm -f "$tmp/$name.tar.xz" "$tmp/SHASUMS256.txt"
     done
     rm -rf "$tmp"
@@ -511,37 +507,36 @@ function _download_nodejs() {
 }
 
 function ensure_nodejs() {
-    # Docker images get the UI from the Dockerfile's build stage and must not carry Node.js.
+    # Docker 镜像里的界面来自 Dockerfile 的构建阶段，镜像中不应带 Node.js。
     if [ "${DOCKER_MODE:-}" = "true" ]; then
-        error "Not installing Node.js in Docker: the admin UI is built in the Dockerfile's panel-ui stage"
+        error "Docker 模式不安装 Node.js：管理端界面在 Dockerfile 的 panel-ui 阶段构建"
         return 1
     fi
-    # vite needs Node >= 18.
+    # vite 需要 Node >= 18。
     if [ "$(_node_major)" -ge 18 ] && command -v npm >/dev/null 2>&1; then
         return 0
     fi
     local dir
     if ! dir=$(_download_nodejs); then
-        error "Could not get Node.js v${HIDDIFY_NODE_VERSION} (tried: ${HIDDIFY_NODE_MIRRORS}). Set HIDDIFY_NODE_MIRRORS to a reachable mirror."
+        error "无法获取 Node.js v${HIDDIFY_NODE_VERSION}（已尝试：${HIDDIFY_NODE_MIRRORS}）。请把 HIDDIFY_NODE_MIRRORS 设为可访问的镜像。"
         return 1
     fi
-    # Only this shell (the installer) sees it; nothing is installed system-wide.
+    # 只有当前 shell（安装脚本）能看到它，不会装到系统全局。
     export PATH="$dir/bin:$PATH"
     [ "$(_node_major)" -ge 18 ] && command -v npm >/dev/null 2>&1 || return 1
-    # Upgrade the private copy's npm once; `-g` installs into $dir (Node's own prefix), not the system.
+    # 只升级一次私有副本的 npm；`-g` 装进 $dir（Node 自己的前缀），不影响系统。
     if [ -n "$HIDDIFY_NPM_VERSION" ] && [ "$(npm -v 2>/dev/null)" != "$HIDDIFY_NPM_VERSION" ]; then
-        warning "Updating npm $(npm -v) -> $HIDDIFY_NPM_VERSION (private Node only)..." >&2
+        warning "正在升级 npm $(npm -v) -> $HIDDIFY_NPM_VERSION（仅私有 Node）……" >&2
         if ! npm install -g --no-audit --no-fund --loglevel=error "npm@$HIDDIFY_NPM_VERSION"; then
-            warning "Could not update npm; building with npm $(npm -v)" >&2
+            warning "npm 升级失败，改用现有 npm $(npm -v) 继续构建" >&2
         fi
     fi
     return 0
 }
 
-# The UI build needs ~1.2 GB of RAM (Node heap capped at HIDDIFY_UI_BUILD_HEAP_MB; it fails
-# below ~900 MB). Small
-# VPSes get the build OOM-killed, so add a temporary swap file for the build when
-# free RAM + swap is below HIDDIFY_UI_BUILD_MIN_MEM_MB; it is removed right after.
+# 界面构建约需 1.2 GB 内存（Node 堆上限由 HIDDIFY_UI_BUILD_HEAP_MB 控制；低于
+# 约 900 MB 就会失败）。小内存 VPS 上构建会被 OOM 杀掉，因此当可用内存 + swap
+# 低于 HIDDIFY_UI_BUILD_MIN_MEM_MB 时，为构建临时加一个 swap 文件，构建完立即删除。
 HIDDIFY_UI_BUILD_HEAP_MB="${HIDDIFY_UI_BUILD_HEAP_MB:-2048}"
 HIDDIFY_UI_BUILD_MIN_MEM_MB="${HIDDIFY_UI_BUILD_MIN_MEM_MB:-1600}"
 _HIDDIFY_UI_SWAPFILE="/var/tmp/hiddify-ui-build.swap"
@@ -560,10 +555,10 @@ function _add_build_swap() {
     [ "$size_mb" -gt 2048 ] && size_mb=2048
     disk_mb=$(df -Pm /var/tmp | awk 'NR==2 {print $4}')
     if [ "${disk_mb:-0}" -lt $(( size_mb + 512 )) ]; then
-        warning "Only ${have} MB of memory free and not enough disk for temporary swap; the admin UI build may fail"
+        warning "可用内存仅 ${have} MB，且磁盘空间不足以创建临时 swap；管理端界面构建可能失败"
         return 0
     fi
-    warning "Only ${have} MB of memory free: adding ${size_mb} MB of temporary swap for the admin UI build"
+    warning "可用内存仅 ${have} MB：为构建管理端界面临时添加 ${size_mb} MB swap"
     swapoff "$_HIDDIFY_UI_SWAPFILE" >/dev/null 2>&1
     rm -f "$_HIDDIFY_UI_SWAPFILE"
     if ! { fallocate -l "${size_mb}M" "$_HIDDIFY_UI_SWAPFILE" 2>/dev/null || dd if=/dev/zero of="$_HIDDIFY_UI_SWAPFILE" bs=1M count="$size_mb" status=none; }; then
@@ -572,7 +567,7 @@ function _add_build_swap() {
     fi
     chmod 600 "$_HIDDIFY_UI_SWAPFILE"
     if ! { mkswap "$_HIDDIFY_UI_SWAPFILE" >/dev/null && swapon "$_HIDDIFY_UI_SWAPFILE"; }; then
-        # e.g. containers or filesystems that cannot swap: build without it
+        # 例如容器或不支持 swap 的文件系统：不使用 swap 直接构建
         rm -f "$_HIDDIFY_UI_SWAPFILE"
     fi
     return 0
@@ -584,11 +579,10 @@ function _remove_build_swap() {
     rm -f "$_HIDDIFY_UI_SWAPFILE"
 }
 
-# Admin UI artifacts are published per commit on a `prebuilt` branch so a 1 GB VPS
-# does not have to run npm. The sha256 lives in this repo (scripts/admin-ui-prebuilt.tsv,
-# updated together with the submodule pointer) rather than in the panel: a commit
-# that changed the panel HEAD would never match the artifact it just published.
-# A missing entry or a bad checksum simply compiles from source.
+# 管理端界面的构建产物按提交发布在 `prebuilt` 分支上，这样 1 GB 内存的 VPS 无需
+# 运行 npm。sha256 清单保存在本仓库（scripts/admin-ui-prebuilt.tsv，与子模块指针
+# 一起更新），而不是放在面板里：改变面板 HEAD 的那个提交永远匹配不上它刚发布的
+# 产物。清单缺项或校验不符时，就退回到源码编译。
 HIDDIFY_ADMIN_UI_PREBUILT="${HIDDIFY_ADMIN_UI_PREBUILT:-1}"
 HIDDIFY_ADMIN_UI_PREBUILT_REPO="${HIDDIFY_ADMIN_UI_PREBUILT_REPO:-xgs87762GH/hiddifypanel}"
 HIDDIFY_ADMIN_UI_PREBUILT_BRANCH="${HIDDIFY_ADMIN_UI_PREBUILT_BRANCH:-prebuilt}"
@@ -598,7 +592,7 @@ function _panel_source_rev() {
     git -C "${1%/}" rev-parse HEAD 2>/dev/null || true
 }
 
-# Install the artifact built for this exact commit; non-zero means "compile it".
+# 安装与当前提交精确对应的产物；返回非 0 表示"改为从源码编译"。
 function _install_admin_ui_prebuilt() {
     local src="${1%/}"
     local manifest="${HIDDIFY_ADMIN_UI_PREBUILT_MANIFEST:-$HIDDIFY_DIR/scripts/admin-ui-prebuilt.tsv}"
@@ -610,17 +604,17 @@ function _install_admin_ui_prebuilt() {
     [ -n "$rev" ] || return 1
     read -r file sum < <(awk -v r="$rev" '$1 == r { print $2, $3; exit }' "$manifest" 2>/dev/null)
     if [ -z "${file:-}" ] || [ -z "${sum:-}" ]; then
-        warning "No prebuilt admin UI for panel ${rev:0:12}; compiling from source (slow on small VPSes)"
+        warning "面板 ${rev:0:12} 没有预构建的管理端界面；改为源码编译（在小 VPS 上较慢）"
         return 1
     fi
     tmp=$(mktemp /var/tmp/hiddify-admin-ui-XXXXXX.tar.gz) || return 1
     if ! curl -fsSL --connect-timeout 10 --max-time 600 "${HIDDIFY_ADMIN_UI_PREBUILT_BASE%/}/$file" -o "$tmp"; then
-        warning "Prebuilt admin UI is unreachable ($file); compiling from source instead"
+        warning "无法获取预构建的管理端界面（$file）；改为源码编译"
         rm -f "$tmp"
         return 1
     fi
     if ! { echo "$sum  $tmp" | sha256sum -c - >/dev/null 2>&1; }; then
-        warning "Prebuilt admin UI checksum mismatch; compiling from source instead"
+        warning "预构建的管理端界面校验和不符合；改为源码编译"
         rm -f "$tmp"
         return 1
     fi
@@ -632,14 +626,14 @@ function _install_admin_ui_prebuilt() {
     fi
     rm -f "$tmp"
     [ -f "$static/admin-v2/index.html" ] || return 1
-    # Beats every source file in the freshness check below, so the next run is a no-op.
+    # 让它比下面新鲜度检查里的任何源文件都更新，下次运行就不会再重建。
     touch "$static/admin-v2/index.html"
     return 0
 }
 
-# build_panel_admin_ui <panel source dir> [--force]
-# Builds the admin UI into <dir>/hiddifypanel/static/admin-v2/ when it is missing
-# or older than its sources. No-op for trees without the UI source (e.g. a wheel).
+# build_panel_admin_ui <面板源码目录> [--force]
+# 若 <目录>/hiddifypanel/static/admin-v2/ 缺失或比源码旧，则把管理端界面构建进去。
+# 对于没有界面源码的代码树（例如 wheel）为空操作。
 function build_panel_admin_ui() {
     local src="${1%/}" force="${2:-}"
     local ui="$src/hiddifypanel/admin_v2"
@@ -652,12 +646,12 @@ function build_panel_admin_ui() {
         return 0
     fi
     if [ "$force" != "--force" ] && _install_admin_ui_prebuilt "$src"; then
-        success "Admin UI installed from the prebuilt artifact (no npm build needed)"
+        success "管理端界面已用预构建产物安装（无需 npm 构建）"
         return 0
     fi
-    update_progress "Building..." "Hiddify Panel admin UI (this can take a few minutes)" 30
-    ensure_nodejs || { error "Node.js >= 18 is required to build the admin UI"; return 1; }
-    # Only clean up node_modules we created: a developer's own checkout keeps theirs.
+    update_progress "正在构建……" "Hiddify 面板管理端界面（可能需要几分钟）" 30
+    ensure_nodejs || { error "构建管理端界面需要 Node.js >= 18"; return 1; }
+    # 只清理我们自己创建的 node_modules：开发者自己的检出保留原样。
     local had_node_modules=0
     [ -d "$ui/node_modules" ] && had_node_modules=1
     _add_build_swap
@@ -667,21 +661,21 @@ function build_panel_admin_ui() {
     _remove_build_swap
     if [ "$rc" != 0 ]; then
         if [ "$rc" = 137 ] || dmesg 2>/dev/null | tail -n 20 | grep -qi "killed process.*node"; then
-            error "Building the admin UI ran out of memory (needs ~1.2 GB free RAM or swap)"
+            error "构建管理端界面时内存不足（需要约 1.2 GB 可用内存或 swap）"
         else
-            error "Building the admin UI failed (see the npm output above)"
+            error "构建管理端界面失败（详见上面的 npm 输出）"
         fi
         return 1
     fi
     if [ "$had_node_modules" = 0 ] && [ -z "${HIDDIFY_KEEP_NODE_MODULES:-}" ]; then
         rm -rf "$ui/node_modules"
     fi
-    success "Admin UI built"
+    success "管理端界面构建完成"
 }
 
-# build_panel_user_ui <panel source dir> [--force]
-# Builds user_front into <dir>/hiddifypanel/static/user-front/ (same model as admin_v2).
-# Default: prebuilt gh-pages (safe on small VPS). Set HIDDIFY_USER_FRONT_FROM_SOURCE=1 to compile.
+# build_panel_user_ui <面板源码目录> [--force]
+# 把 user_front 构建到 <目录>/hiddifypanel/static/user-front/（与 admin_v2 同一模式）。
+# 默认使用 gh-pages 上的预构建产物（在小 VPS 上更安全）。设 HIDDIFY_USER_FRONT_FROM_SOURCE=1 则从源码编译。
 function build_panel_user_ui() {
     local src="${1%/}" force="${2:-}"
     local ui="$src/hiddifypanel/user_front"
@@ -695,10 +689,10 @@ function build_panel_user_ui() {
         [ -z "$(find "$ui/src" "$ui/index.html" "$ui/package-lock.json" "$ui/vite.config.ts" "$ui/public" -newer "$out" -print -quit 2>/dev/null)" ]; then
         return 0
     fi
-    update_progress "Building..." "Hiddify Panel user UI" 32
+    update_progress "正在构建……" "Hiddify 面板用户端界面" 32
     local rc=0
     if [ "${HIDDIFY_USER_FRONT_FROM_SOURCE:-}" = "1" ] && [ -f "$build_sh" ]; then
-        ensure_nodejs || { error "Node.js >= 18 is required to build the user UI from source"; return 1; }
+        ensure_nodejs || { error "从源码构建用户端界面需要 Node.js >= 18"; return 1; }
         local had_node_modules=0
         [ -d "$ui/node_modules" ] && had_node_modules=1
         _add_build_swap
@@ -708,9 +702,9 @@ function build_panel_user_ui() {
         if [ "$had_node_modules" = 0 ] && [ -z "${HIDDIFY_KEEP_NODE_MODULES:-}" ]; then
             rm -rf "$ui/node_modules"
         fi
-        # OOM / failed compile → still ship a working UI from gh-pages.
+        # OOM / 编译失败 → 仍然用 gh-pages 的产物提供一个可用的界面。
         if [ "$rc" != 0 ] && [ -f "$prebuilt_sh" ]; then
-            warning "user_front source build failed; installing prebuilt gh-pages"
+            warning "user_front 源码构建失败；改为安装 gh-pages 上的预构建产物"
             bash "$prebuilt_sh" || rc=$?
         fi
     elif [ -f "$prebuilt_sh" ]; then
@@ -719,43 +713,43 @@ function build_panel_user_ui() {
         return 0
     fi
     if [ "$rc" != 0 ]; then
-        error "Installing the user UI failed (see the output above)"
+        error "安装用户端界面失败（详见上面的输出）"
         return 1
     fi
-    success "User UI ready"
+    success "用户端界面已就绪"
 }
 
-# build_panel_ui <panel source dir> [--force]
-# Builds admin + user frontends for a panel source tree (no-op when sources are absent).
+# build_panel_ui <面板源码目录> [--force]
+# 为面板源码树构建管理端 + 用户端界面（源码不存在时为空操作）。
 function build_panel_ui() {
     build_panel_admin_ui "$@" || return $?
     build_panel_user_ui "$@" || return $?
 }
 
-# install_panel_from_git [ref] [pip command]
-# Installs the panel from GitHub (develop / tags): clone, build the UI, install.
-# `pip install git+...` cannot be used any more: it would install without the UI.
+# install_panel_from_git [ref] [pip 命令]
+# 从 GitHub 安装面板（develop / tag）：克隆、构建界面、安装。
+# 不能再用 `pip install git+...`：那样装出来的面板没有界面。
 function install_panel_from_git() {
     local ref="${1:-}" pip_cmd="${2:-uv pip}"
     if is_dev_checkout; then
-        warning "Development checkout: the panel stays installed from $HIDDIFY_DIR/services/panel/src (git pull to update it)"
+        warning "开发版检出：面板仍从 $HIDDIFY_DIR/services/panel/src 安装（更新请在该目录 git pull）"
         return 0
     fi
     install_package git
-    # Outside $HIDDIFY_DIR on purpose: the config renderer (scripts/common/jinja.py) walks
-    # $HIDDIFY_DIR for *.j2 and would try to render the panel's own templates.
+    # 故意放在 $HIDDIFY_DIR 之外：配置渲染器（scripts/common/jinja.py）会遍历
+    # $HIDDIFY_DIR 下的 *.j2，并可能去渲染面板自己的模板。
     local dir
     dir=$(mktemp -d /var/tmp/hiddify-panel-src.XXXXXX) || return 1
     local rc=0
     if ! git clone --quiet --depth 1 --recurse-submodules ${ref:+--branch "$ref"} "$HIDDIFY_PANEL_GIT_URL" "$dir/src"; then
-        error "Could not download the panel source (${ref:-default branch})"
+        error "无法下载面板源码（${ref:-默认分支}）"
         rc=1
     elif ! build_panel_ui "$dir/src" --force; then
         rc=1
     else
         { $pip_cmd install -U --no-deps --force-reinstall "$dir/src" && $pip_cmd install "$dir/src"; } || rc=$?
     fi
-    # Always clean up, also when the download or the UI build failed.
+    # 无论下载或界面构建是否失败，都要清理。
     rm -rf "$dir"
     return $rc
 }
@@ -801,22 +795,22 @@ function msg() {
 
 
 function install_python() {
-    # Check if USE_VENV is not set or is empty
+    # USE_VENV 未设置或为空时的默认值
     if [ -z "${USE_VENV}" ]; then
-        # echo "USE_VENV variable is not set or is empty. Exiting..."
+        # echo "USE_VENV 变量未设置或为空，退出……"
         export USE_VENV=313
     fi
     
-    # region install python3.10 system-widely
+    # region 在系统范围安装 python3.10
     rm -rf /usr/lib/python3/dist-packages/blinker*
     
 
     # endregion
 
-    # region make virtual env
-    # Some third-party packages are not compatible with python3.13 eg. grpcio-tools
-    # Therefore we still use python3.10 
-    # Check if USE_VENV doesn't exist or is true
+    # region 创建虚拟环境
+    # 部分第三方包（如 grpcio-tools）与 python3.13 不兼容
+    # 因此仍然使用 python3.10
+    # 检查 USE_VENV 是否存在或为 true
     # if [ "${USE_VENV}" = true ]; then
         activate_python_venv
     # fi
@@ -853,18 +847,18 @@ function activate_python_venv() {
 
 
 function install_python310() {
-    # Check if USE_VENV is not set or is empty
+    # USE_VENV 未设置或为空时的默认值
    # if [ -z "${USE_VENV}" ]; then
-        # echo "USE_VENV variable is not set or is empty. Exiting..."
+        # echo "USE_VENV 变量未设置或为空，退出……"
   #  fi
     export USE_VENV=310
-    # region install python3.10 system-widely
+    # region 在系统范围安装 python3.10
     rm -rf /usr/lib/python3/dist-packages/blinker*
     if ! is_installed /opt/hiddify-manager/.venv/bin/python3.10 ;then
         rm -rf /opt/hiddify-manager/.venv/
     fi
     if ! python3.10 --version &>/dev/null; then
-        echo "Python 3.10 is not installed. "
+        echo "尚未安装 Python 3.10。"
         install_package software-properties-common
         add-apt-repository -y ppa:deadsnakes/ppa
     #    sudo apt-get -y remove python*
@@ -878,28 +872,28 @@ function install_python310() {
     fi
     # endregion
 
-    # region make virtual env
-    # Some third-party packages are not compatible with python3.13 eg. grpcio-tools
-    # Therefore we still use python3.10 
-    # Check if USE_VENV doesn't exist or is true
+    # region 创建虚拟环境
+    # 部分第三方包（如 grpcio-tools）与 python3.13 不兼容
+    # 因此仍然使用 python3.10
+    # 检查 USE_VENV 是否存在或为 true
 #    if [ "${USE_VENV}" = "310" ]; then
         activate_python_venv
  #   fi
     # endregion
 
 }
-# How a panel link's certificate looks to a browser: trusted, self_signed (or otherwise not trusted) or insecure (http).
-# Asks this server itself, so a domain behind a CDN or not resolving yet is still checked.
+# 面板链接的证书在浏览器眼里的状态：trusted（可信）、self_signed（自签名或其他不受信任）、
+# insecure（http）。直接向本机自己发起检查，因此即使域名走 CDN 或尚未解析也能判断。
 function link_cert_state() {
     local url="$1" host
     [[ "$url" == http://* ]] && { echo insecure; return; }
-    # Ask this server itself, so a domain behind a CDN or not resolving yet is still checked.
+    # 向本机自己发起检查，因此即使域名走 CDN 或尚未解析也能判断。
     host="${url#https://}"
     host="${host%%/*}"
-    [[ "$host" == \[* ]] || host="${host%%:*}"  # strip :port, keep [IPv6] intact
-    # openssl sends the ClientHello immediately; curl loads the whole CA bundle first, which on slow
-    # boards takes longer than the 100ms rpxy-l4 waits for the SNI of a new connection. The probe then
-    # fails and a perfectly valid certificate is reported as self-signed.
+    [[ "$host" == \[* ]] || host="${host%%:*}"  # 去掉 :port，保留完整的 [IPv6]
+    # openssl 会立刻发出 ClientHello；curl 要先加载整个 CA 证书库，在慢速设备上这比
+    # rpxy-l4 为新连接等待 SNI 的 100ms 还久。这样探测会失败，一个完全有效的证书
+    # 就被报成自签名。
     if timeout 8 openssl s_client -connect 127.0.0.1:443 -servername "$host" \
         -verify_return_error -verify_hostname "$host" </dev/null >/dev/null 2>&1; then
         echo trusted
@@ -908,8 +902,8 @@ function link_cert_state() {
     fi
 }
 
-# The panel's links, grouped by how safe they are to open: a trusted certificate (green), self-signed (yellow: the
-# browser warns), plain http (red). Clickable in terminals that support links.
+# 面板的各个链接，按打开时的安全程度分组：可信证书（绿色）、自签名（黄色：浏览器会警告）、
+# 纯 http（红色）。在支持链接的终端里可点击。
 function print_panel_links() {
     local -a trusted=() self_signed=() insecure=()
     local link
@@ -923,7 +917,7 @@ function print_panel_links() {
     done < <(jq -r '.panel_links[]' /opt/hiddify-manager/data/current.json | awk '!seen[$0]++')
 
     local reset=$'\e[0m' dim=$'\e[2m' bold=$'\e[1m'
-    _panel_link_group() {  # color icon title note links...
+    _panel_link_group() {  # 颜色 图标 标题 说明 链接...
         local color="$1" icon="$2" title="$3" note="$4"
         shift 4
         [ $# -gt 0 ] || return 0
@@ -934,11 +928,11 @@ function print_panel_links() {
         echo
     }
     echo
-    printf "  %sOpen your panel%s\n\n" "$bold" "$reset"
-    # The best last: right above the prompt, where the eye lands
-    _panel_link_group $'\e[91m' "✖" "Insecure" "not encrypted (http): avoid" "${insecure[@]}"
-    _panel_link_group $'\e[93m' "⚠" "Self-signed" "the browser warns; use these only if the secure ones do not open" "${self_signed[@]}"
-    _panel_link_group $'\e[92m' "✔" "Secure" "a trusted certificate" "${trusted[@]}"
+    printf "  %s打开你的面板%s\n\n" "$bold" "$reset"
+    # 最好的放在最后：紧挨着提示符，目光自然落在那里
+    _panel_link_group $'\e[91m' "✖" "不安全" "未加密（http）：请勿使用" "${insecure[@]}"
+    _panel_link_group $'\e[93m' "⚠" "自签名" "浏览器会警告；仅在安全链接打不开时才用这些" "${self_signed[@]}"
+    _panel_link_group $'\e[92m' "✔" "安全" "证书受信任" "${trusted[@]}"
 }
 
 function check_hiddify_panel() {
@@ -946,7 +940,7 @@ function check_hiddify_panel() {
         reload_all_configs >/dev/null
         
         if [[ $? != 0 ]]; then
-            error "Exception in Hiddify Panel. Please send the log to hiddify@gmail.com"
+            error "Hiddify 面板出现异常。请把日志发送到 hiddify@gmail.com"
             exit 4
         fi
         echo -e "\n\n"
@@ -957,7 +951,8 @@ function check_hiddify_panel() {
         install_package qrencode
         center_text "$(qrencode -t utf8 -m 2 $(cat /opt/hiddify-manager/data/current.json | jq -r '.panel_links[]' | tail -n 1))"
         echo ""
-        center_text $'\t\033[92mFinished! Thank you for helping to skip filternet.\033[0m'
+        # "Finished!" 是面板 apply 流程判定日志结束的标记（apply_api.py: FINISHED_MARK），请勿翻译
+        center_text $'\t\033[92mFinished! 感谢你为跨越网络过滤所做的贡献。\033[0m'
         
         echo -e "\n"
         print_panel_links
@@ -974,11 +969,11 @@ function check_hiddify_panel() {
                     break
                 else
                     if [ $i -eq 10 ]; then
-                        error "important service $s is not activated after 10 seconds"
-                        error "Installation Failed!"
+                        error "重要服务 $s 在 10 秒内仍未启动"
+                        error "安装失败！"
                         exit 32
                     fi
-                    warning "an important service $s is not activating yet"
+                    warning "重要服务 $s 尚未启动"
                     sleep 1
                 fi
             done
@@ -988,15 +983,15 @@ function check_hiddify_panel() {
 }
 
 
-# The Hiddify logo: a plain text drawing (also shown by the progress window, cli_progress --logo)
+# Hiddify 的 logo：一张纯文本图形（进度窗口 cli_progress --logo 也用它）
 export HIDDIFY_LOGO="$HIDDIFY_SCRIPTS/common/logo.ico"
 
-# The logo centered, in blue
+# 居中显示、蓝色的 logo
 function print_logo() {
     local LC_ALL=C.UTF-8 width longest=0 line
     width="$(tput cols 2>/dev/null || echo 80)"
     while IFS= read -r line; do
-        [ "${#line}" -gt "$longest" ] && longest=${#line}  # characters, not bytes (▓ is 3 bytes)
+        [ "${#line}" -gt "$longest" ] && longest=${#line}  # 按字符数而非字节数（▓ 占 3 字节）
     done <"$HIDDIFY_LOGO"
     local pad=$(((width - longest) / 2))
     [ "$pad" -lt 0 ] && pad=0
@@ -1006,11 +1001,11 @@ function print_logo() {
 }
 
 function show_progress_window() {
-    # Without a usable terminal (a pipe, cron, ssh without -t) cli_progress prints the output as it comes instead
+    # 没有可用终端时（管道、cron、未加 -t 的 ssh），cli_progress 改为边产生边打印输出
     activate_python_venv
     uv pip install -q "cli-progress>=3.0.2"
     disable_ansii_modes
-    # The logo and the progress; the output behind L (and always in the --log file)
+    # logo 与进度；输出在按 L 后显示（同时也总会写入 --log 指定的文件）
     python -m cli_progress --title "Hiddify Manager" --logo "$HIDDIFY_LOGO" "$@"
     exit_code=$?
     disable_ansii_modes
@@ -1027,32 +1022,32 @@ function log_file() {
     echo "$(log_dir)/${1}.log"
 }
 
-# Keep a log to its last 3000 lines once it passes 6000.
+# 日志超过 6000 行时，只保留最后 3000 行。
 function trim_log() {
     if [ -f "$1" ] && [ "$(wc -l <"$1")" -gt 6000 ]; then
         tail -n 3000 "$1" >"$1.tmp" && mv "$1.tmp" "$1"
     fi
 }
 
-# Put the time in front of every line read from stdin.
+# 给从 stdin 读到的每一行加上时间前缀。
 function add_time() {
     while IFS= read -r line; do echo "$(date +%T) $line"; done
 }
 
-# run_timed LABEL COMMAND...: run a command, saying when it starts and ends (seconds, exit code); a failure is also said on stderr.
+# run_timed 标签 命令...：运行命令，并输出开始/结束信息（耗时秒数、退出码）；失败时同时写到 stderr。
 function run_timed() {
     local label="$1" start=$SECONDS rc
     shift
-    echo "$label: start"
+    echo "$label：开始"
     "$@"
     rc=$?
-    echo "$label: end in $((SECONDS - start))s (exit $rc)"
-    [ "$rc" -eq 0 ] || echo "$label: failed (exit $rc)" >&2
+    echo "$label：结束，用时 $((SECONDS - start))s（退出码 $rc）"
+    [ "$rc" -eq 0 ] || echo "$label：失败（退出码 $rc）" >&2
     return $rc
 }
 
-# run_logged NAME COMMAND...: run a command and keep what it prints in $(log_dir)/NAME.out.log and its errors in
-# NAME.err.log (one header line per run, then the lines with their time). Also prints them. Returns the command's exit code.
+# run_logged 名称 命令...：运行命令，把它打印的内容保存到 $(log_dir)/名称.out.log，错误保存到
+# 名称.err.log（每次运行一行分隔头，随后是带时间的行）。同时也会打印出来。返回命令的退出码。
 function run_logged() {
     local name="$1" out err tmp_out tmp_err rc
     shift
@@ -1064,50 +1059,49 @@ function run_logged() {
     tmp_err="$(mktemp)"
     "$@" >"$tmp_out" 2>"$tmp_err"
     rc=$?
-    echo "===== $(date '+%F %T') $name: exit $rc =====" | tee -a "$out" >>"$err"
+    echo "===== $(date '+%F %T') $name：退出码 $rc =====" | tee -a "$out" >>"$err"
     add_time <"$tmp_out" | tee -a "$out"
     add_time <"$tmp_err" | tee -a "$err" >&2
     rm -f "$tmp_out" "$tmp_err"
     return $rc
 }
 
-# Every mutex in hiddify is an flock on a file under $HIDDIFY_LOCKS. The kernel
-# ties the lock to the open file descriptor, so it is released the moment the
-# owning process goes away — clean exit, kill -9, crash or power loss alike.
-# The .lock files carry no state, so one left behind after a crash never blocks
-# a later run: there is nothing to clean up and no staleness timeout to tune.
-# A development checkout: /opt/hiddify-manager is the git clone itself (DEVELOPMENT.md). The panel is then installed
-# editable from services/panel/src, and the updater never overwrites the tree (git pull instead).
+# hiddify 里所有互斥都基于 $HIDDIFY_LOCKS 下某个文件的 flock。内核把锁绑定在已打开的
+# 文件描述符上，所以持有锁的进程一消失，锁立即释放 —— 正常退出、kill -9、崩溃或
+# 断电都一样。.lock 文件不承载任何状态，崩溃后留下的文件不会阻塞后续运行：
+# 无需清理，也没有"过期时间"要调。
+# 开发版检出：/opt/hiddify-manager 本身就是 git 克隆（见 DEVELOPMENT.md）。此时面板以
+# 可编辑方式从 services/panel/src 安装，更新器不会覆盖这棵目录树（改用 git pull）。
 function is_dev_checkout() {
     [ -d "$HIDDIFY_DIR/.git" ] || [ -f "$HIDDIFY_DIR/.git" ]
 }
 
 function lock_file() {
-    # 755: the panel (hiddify-panel) opens them read-only to see whether an install runs (apply_api.py)
+    # 755：面板（hiddify-panel）以只读方式打开它们，用来判断是否有安装正在运行（apply_api.py）
     mkdir -p -m 755 "$HIDDIFY_LOCKS" >/dev/null 2>&1
     echo "$HIDDIFY_LOCKS/${1}.lock"
 }
 
-# Run a command while holding a named lock, waiting for it to become free.
-# -o keeps the command from passing the lock on to anything it spawns.
+# 在持有指定名称的锁的情况下运行命令，并等待锁释放。
+# -o 防止命令把锁传给它的子进程。
 function with_lock() {
     local name="$1"
     shift
     flock -o "$(lock_file "$name")" "$@"
 }
 
-# Take a named lock for the lifetime of this shell, or fail fast if it is held.
+# 为当前 shell 的整个生命周期持有指定名称的锁；锁已被占用时立即失败退出。
 function set_lock() {
     exec {HIDDIFY_LOCK_FD}>"$(lock_file "$1")"
     if ! flock -n "$HIDDIFY_LOCK_FD"; then
-        error "Another installation is running.... Please wait until it finishes."
+        error "另一个安装正在进行…… 请等待它结束。"
         exit 12
     fi
 }
 
 function remove_lock() {
     [ -n "$HIDDIFY_LOCK_FD" ] || return 0
-    # Closing the descriptor is what releases the lock.
+    # 关闭文件描述符即释放锁。
     exec {HIDDIFY_LOCK_FD}>&-
     unset HIDDIFY_LOCK_FD
 }
@@ -1115,7 +1109,7 @@ function remove_lock() {
 
 function hconfig() {
     local json_file="/opt/hiddify-manager/data/current.json"
-    [ ! -f "$json_file" ] && { error "panel config file not found"; return 1; }
+    [ ! -f "$json_file" ] && { error "找不到面板配置文件"; return 1; }
 
     local key=$1
     local essential_vars=$(jq -r '.chconfigs["0"] | to_entries[] | .key' "$json_file")
@@ -1123,27 +1117,27 @@ function hconfig() {
         if [ "$key" == "$var" ]; then
             local value=$(jq -r --arg var "$var" '.chconfigs["0"][$var]' "$json_file")
             echo "$value"
-            return 0  # Exit the function with success status
+            return 0  # 以成功状态退出函数
         fi
     done
 
-    # If the key is not found, return an error status
-    error "Error: Key not found: $key"
+    # 找不到该键时返回错误状态
+    error "错误：未找到键 $key"
     return 1
 }
-#TODO: check functionality when not using the venv
-# Hiddify's systemd units, one name per line (no ".service"): the unit files one and two levels under services/ (not
-# services/deprecated; ** without globstar is only one level), the running / enabled instances of the template units
-# (hiddify-*@*), and the WireGuard interfaces. For stop / restart / status / uninstall.
+#TODO: 检查不使用 venv 时的功能是否正常
+# Hiddify 的 systemd 单元列表，每行一个名字（不含 ".service"）：services/ 下一层和两层的单元文件（不含
+# services/deprecated；没有 globstar 时 ** 只匹配一层）、模板单元（hiddify-*@*）正在运行/已启用的实例，
+# 以及 WireGuard 接口。供 stop / restart / status / uninstall 使用。
 function hiddify_service_units() {
     (
-        shopt -s nullglob # in this subshell only
+        shopt -s nullglob # 仅在此子 shell 中生效
         local f name
         for f in "$HIDDIFY_SERVICES"/*/*.service "$HIDDIFY_SERVICES"/*/*/*.service; do
             [[ "$f" == "$HIDDIFY_SERVICES/deprecated/"* ]] && continue
             name=${f##*/}
             name=${name%.service}
-            [[ "$name" == *@ ]] && continue # a template: its instances come from systemd below
+            [[ "$name" == *@ ]] && continue # 模板单元：其实例由下面的 systemd 列表给出
             echo "$name"
         done
         systemctl list-units --all --plain --no-legend 'hiddify-*@*.service' 2>/dev/null | awk '{print $1}' | sed 's/\.service$//'
@@ -1152,16 +1146,15 @@ function hiddify_service_units() {
     ) | sort -u
 }
 
-# Validate a generated config before (re)loading the service that consumes it.
-# config_check_ok <label> <config-file> <checker-command...>
-# Refusing to reload leaves the previous good config running, which is safer than a
-# restart loop. Anything that looks like the checker itself being broken (missing
-# binary, unknown subcommand, config not generated yet) must NOT block a reload.
+# 在（重新）加载使用该配置的服务之前，先校验生成的配置。
+# config_check_ok <标签> <配置文件> <校验命令...>
+# 拒绝重载会保留上一份可用的配置继续运行，比陷入重启循环更安全。任何看起来是校验器
+# 本身出问题的情况（二进制缺失、未知子命令、配置尚未生成）都绝不能阻止重载。
 function config_check_ok() {
     local label="$1" config_file="$2"
     shift 2
     if [ ! -f "$config_file" ]; then
-        echo "config check skipped for $label: $config_file does not exist yet"
+        echo "跳过 $label 的配置检查：$config_file does not exist yet（尚未生成）"
         return 0
     fi
     local output rc=0
@@ -1170,10 +1163,10 @@ function config_check_ok() {
         return 0
     fi
     if [ $rc -eq 127 ] || echo "$output" | grep -qiE 'unknown command|invalid choice|flag provided but not defined|^usage:'; then
-        echo "config check unavailable for $label (checker reported usage/not-found), reloading anyway"
+        echo "$label 的配置检查不可用（unavailable：校验器报用法错误或找不到），仍然继续重载"
         return 0
     fi
-    echo "Error in $label Config!!!! do not reload $label service"
+    echo "$label 配置有错误！不要重载（do not reload $label service）"
     if [ -n "$output" ]; then echo "$output"; fi
     return 1
 }
@@ -1181,8 +1174,8 @@ function config_check_ok() {
 function hiddify-panel-run() {
     local base_command="export HIDDIFY_CFG_PATH='$HIDDIFY_PANEL_CFG_PATH'; cd /opt/hiddify-manager/services/panel/; source ${venv_path}/bin/activate && $*"
 
-    # No eval: the command is complete already, and parsing it a second time would run whatever an
-    # argument happens to contain (this is reachable from the panel through the sudo commander).
+    # 不用 eval：命令本身已经拼好，再次解析它会把某个参数里恰好包含的内容当作命令执行
+    # （这条路径可以从面板经 sudo commander 触达）。
     if [ "$(whoami)" == "hiddify-panel" ]; then
         bash -c "$base_command"
     else
@@ -1193,36 +1186,36 @@ function hiddify-panel-run() {
 function hiddify-panel-cli() {
   hiddify-panel-run "python3 -m hiddifypanel $*"
 }
-# region installer utils
+# region 安装器工具函数
 function checkOS() {
-    # List of supported distributions
+    # 支持的发行版列表
     #supported_distros=("Ubuntu" "Debian" "Fedora" "CentOS" "Arch")
     supported_distros=("Ubuntu")
-    # Get the distribution name and version
+    # 获取发行版名称与版本
     if [[ -f "/etc/os-release" ]]; then
         source "/etc/os-release"
         distro_name=$NAME
         distro_version=$VERSION_ID
     else
-        echo "Unable to determine distribution."
+        echo "无法判断发行版。"
         exit 1
     fi
-    # Check if the distribution is supported
+    # 检查该发行版是否受支持
     if [[ " ${supported_distros[@]} " =~ " ${distro_name} " ]]; then
-        echo "Your Linux distribution is ${distro_name} ${distro_version}"
-        : #no-op command
+        echo "你的 Linux 发行版是 ${distro_name} ${distro_version}"
+        : # 空操作命令
     else
-        # Print error message in red
-        echo -e "\e[31mYour Linux distribution (${distro_name} ${distro_version}) is not currently supported.\e[0m"
+        # 用红色打印错误信息
+        echo -e "\e[31m你当前的 Linux 发行版（${distro_name} ${distro_version}）暂不支持。\e[0m"
         exit 1
     fi
     
-    # This script only works on Ubuntu 22 and above
+    # 本脚本仅支持 Ubuntu 22 及以上
     if [ "$(uname)" == "Linux" ]; then
         version_info=$(lsb_release -rs | cut -d '.' -f 1)
-        # Check if it's Ubuntu and version is below 22
+        # 检查是否为 Ubuntu 且版本低于 22
         if [ "$(lsb_release -is)" == "Ubuntu" ] && [ "$version_info" -lt 22 ]; then
-            echo "This script only works on Ubuntu 22 and above"
+            echo "本脚本仅支持 Ubuntu 22 及以上"
             exit
         fi
     fi
@@ -1244,7 +1237,7 @@ function vercomp () {
     fi
     local IFS=.
     local i ver1=($1) ver2=($2)
-    # fill empty fields in ver1 with zeros
+    # 用 0 补齐 ver1 的空字段
     for ((i=${#ver1[@]}; i<${#ver2[@]}; i++))
     do
         ver1[i]=0
@@ -1253,7 +1246,7 @@ function vercomp () {
     do
         if [[ -z ${ver2[i]} ]]
         then
-            # fill empty fields in ver2 with zeros
+            # 用 0 补齐 ver2 的空字段
             ver2[i]=0
         fi
         if ((10#${ver1[i]//[!0-9]/} > 10#${ver2[i]//[!0-9]/}))
@@ -1283,26 +1276,26 @@ function check_venv_compatibility() {
 
     case "$package_mode" in
         v*)
-            # Check if version is greater than or equal to the compatible release version
+            # 检查版本是否大于等于兼容该 venv 的首个正式版本
             
             if [ $(vercomp "$package_mode" "$first_release_compatible_venv_version") == 0 ] || [ $(vercomp "$package_mode" "$first_release_compatible_venv_version") == 1 ]; then
                 USE_VENV=310
             fi
         ;;
         develop|dev)
-            # Develop is always venv compatible
+            # develop 始终兼容 venv
             USE_VENV=313
         ;;
         beta)
-            # Beta is always venv compatible
+            # beta 始终兼容 venv
             USE_VENV=313
         ;;
         release)
-            # Get the latest release version
+            # 取最新的正式版本
             USE_VENV=313
         ;;
         *)
-            echo "Unknown package mode: $package_mode"
+            echo "未知的包模式：$package_mode"
             exit 1
         ;;
     esac
@@ -1314,7 +1307,7 @@ function hiddify-http-api(){
     
 
     if [ -z "$api_path" ] || [ -z "$api_key" ]; then
-        echo "invalid config file"
+        echo "配置文件无效"
         return 1
     fi
     temp_file=$(mktemp)
@@ -1323,7 +1316,7 @@ function hiddify-http-api(){
     rm $temp_file
     if [ "$http_status" -ne 200 ];then
         echo "$http_status"
-        # `return 1$http_status` used to be read as 1404 -> 124: callers could not tell the cases apart.
+        # 以前写作 `return 1$http_status`，会被解读成 1404 -> 124：调用方无法区分这两种情况。
         return 1
     fi
     return 0
@@ -1334,16 +1327,15 @@ function is_valid_current_json() {
 }
 
 function reload_all_configs(){
-    # Fetch into a temp file and replace current.json only when the result is
-    # valid: the API reads its credentials from the current copy, and every
-    # service script depends on it.
+    # 先写入临时文件，只有结果有效时才替换 current.json：API 会从当前这份读取
+    # 凭据，而每个服务脚本都依赖它。
     local cfg=/opt/hiddify-manager/data/current.json
     local tmp
     tmp=$(mktemp "$cfg.XXXXXX") || return 1
-    # HIDDIFY_NO_HTTP_API: the running panel is the old one (an upgrade restarts it only at the end), ask the new code.
+    # HIDDIFY_NO_HTTP_API：正在运行的面板还是旧的（升级只在最后才重启它），改为询问新代码。
     if [ "$HIDDIFY_NO_HTTP_API" = "true" ] || ! hiddify-http-api admin/all-configs/ >"$tmp" || ! is_valid_current_json "$tmp"; then
         if ! hiddify-panel-cli all-configs >"$tmp" || ! is_valid_current_json "$tmp"; then
-            error "Failed to read configs from Hiddify Panel; keeping the previous $cfg"
+            error "无法从 Hiddify 面板读取配置；保留原来的 $cfg"
             rm -f "$tmp"
             return 1
         fi
@@ -1353,11 +1345,11 @@ function reload_all_configs(){
     cat "$cfg"
 }
 
-# Render xray/hiddify-core/haproxy/dns_proxy configs into $HIDDIFY_GENERATED.
-# Prefers the running panel's HTTP API (no extra Python/module load); falls
-# back to the CLI (spawns its own interpreter) only if the panel isn't reachable.
+# 把 xray/hiddify-core/haproxy/dns_proxy 的配置渲染到 $HIDDIFY_GENERATED。
+# 优先用正在运行的面板的 HTTP API（不额外加载 Python/模块）；只有在面板不可达时
+# 才退回 CLI（会启动自己的解释器）。
 function dump_server_configs() {
-    # Optional comma-separated cores (xray,hiddify-core,wireguard,telemt). Empty means all.
+    # 可选，逗号分隔的核心（xray,hiddify-core,wireguard,telemt）。为空表示全部。
     local cores="${1:-}"
     local query=""
     [ "$MODE" = "apply_users" ] && query="no_invalidate_cache=1"
@@ -1367,7 +1359,7 @@ function dump_server_configs() {
         query="${query:+$query&}cores=${enc}"
     fi
     [ -n "$query" ] && query="?${query}"
-    # HIDDIFY_NO_HTTP_API: the running panel is the old one (an upgrade restarts it only at the end), use the new code.
+    # HIDDIFY_NO_HTTP_API：正在运行的面板还是旧的（升级只在最后才重启它），改用新代码。
     if [ "$HIDDIFY_NO_HTTP_API" != "true" ] && hiddify-http-api "admin/dump-server-configs/${query}" >/dev/null; then
         return 0
     fi
@@ -1380,20 +1372,20 @@ function dump_server_configs() {
 
 
 set_files_in_folder_readable_to_hiddify_common_group() {
-    # Ensure paths with spaces or special characters are handled correctly
+    # 确保含空格或特殊字符的路径也能被正确处理
     file=$1
-    find "$file" -type d -exec chmod u+rx,g+rx,o-rwx {} \;  # Directories get rwx for owner, rw- for group
-    find "$file" -type f -exec chmod 640 {} \;  # Files get rw- for owner and group
+    find "$file" -type d -exec chmod u+rx,g+rx,o-rwx {} \;  # 目录：属主 rwx，属组 rw-
+    find "$file" -type f -exec chmod 640 {} \;  # 文件：属主和属组都是 rw-
     find "$file" -exec chown :hiddify-common {} \;
-    # Handle parent directories if the parent is not "hiddify-manager"
-    # Resolve the absolute path of the input
+    # 处理父目录（当父目录不是 "hiddify-manager" 时）
+    # 解析输入路径的绝对路径
     
     parent=$(realpath "$file")
 
     while [[ $(basename "$parent") != "hiddify-manager" && "$parent" != "/" ]]; do
-        # echo "Setting permissions on $parent"
-        chmod u+rx,g+rx "$parent"  # Set permissions on the parent
-        chown :hiddify-common "$parent"  # Change ownership to the group
-        parent=$(dirname "$parent")  # Move to the next parent directory
+        # echo "正在设置 $parent 的权限"
+        chmod u+rx,g+rx "$parent"  # 设置父目录权限
+        chown :hiddify-common "$parent"  # 把属组改为该组
+        parent=$(dirname "$parent")  # 继续处理上一级目录
     done
 }

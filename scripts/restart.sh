@@ -3,6 +3,7 @@ PATH=/usr/local/sbin:/usr/local/bin:/sbin:/bin:/usr/sbin:/usr/bin
 
 cd /opt/hiddify-manager
 source /opt/hiddify-manager/scripts/common/utils.sh
+# 动作可通过 HIDDIFY_SYSTEMCTL_ACTION 指定为 start/stop，默认 restart
 ACTION="${HIDDIFY_SYSTEMCTL_ACTION:-restart}"
 LOG_NAME="restart"
 case "$ACTION" in
@@ -15,6 +16,7 @@ function restart_service() {
         before_stat=$(get_pretty_service_status $s 2>&1)
         systemctl "$ACTION" $s &
         sleep 2
+        # 最多等 10 秒，直到状态符合预期
         for i in {1..10};do
             new_status=$(get_pretty_service_status $s 2>&1)
             if [ "$ACTION" = "stop" ]; then
@@ -29,22 +31,23 @@ function restart_service() {
 }
 function main() {
     echo -e "\n----------------------------------------------------------------"
-    warning "$(printf "%-30s %-20s %s \n" "Name" "Old Status" "New Status")"
+    warning "$(printf "%-30s %-20s %s \n" "服务" "原状态" "新状态")"
     
-    # Restart services and get their status (except hiddify-panel)
+    # 重启所有服务并输出状态（hiddify-panel 稍后单独处理）
     for ss in $(hiddify_service_units); do
         case "$ss" in
             *hiddify-panel*|*hiddify-cli*)
                 continue
                 ;;
             wg-quick@warp)
+                # WARP 关闭时跳过
                 [ "$(hconfig warp_mode)" == "disable" ] && continue
                 ;;
         esac
         restart_service $ss &
     done
     wait
-    # Restart hiddify-panel separately from others
+    # hiddify-panel 放在最后单独重启，避免面板重启导致前面的输出中断
     for ss in hiddify-panel;do
         restart_service $ss &
     done

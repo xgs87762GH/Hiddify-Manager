@@ -1,11 +1,13 @@
 source /opt/hiddify-manager/scripts/common/utils.sh
 source /opt/hiddify-manager/scripts/common/package_manager.sh
 # latest= #$(get_release_version hiddify-sing-box)
-version="" #use specific version if needed otherwise it will use the latest
+version="" # 需要固定版本时在这里填写，留空则使用最新版本
 mkdir -p bin run
 
 
-download_package xray sb.zip $version
+
+download_package xray sb.zip "$version" "" bin/xray
+# 返回 0 表示本次执行了下载，或二进制本身缺失，都需要重新解压安装。
 if [ "$?" == "0"  ] || ! is_installed ./bin/xray; then
     systemctl stop hiddify-xray.service > /dev/null 2>&1 
     rm -rf bin/*

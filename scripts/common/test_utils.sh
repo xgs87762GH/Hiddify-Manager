@@ -1,6 +1,6 @@
 #!/bin/bash
-# Self-check for config_check_ok (the guard that stops a broken generated config from
-# reloading hiddify-core / xray): bash scripts/common/test_utils.sh
+# config_check_ok 的自检脚本（用于阻止有错误的生成配置去重载 hiddify-core / xray）：
+# 运行方式：bash scripts/common/test_utils.sh
 set -e
 eval "$(sed -n '/^function config_check_ok/,/^}/p' "$(dirname -- "$0")/utils.sh")"
 

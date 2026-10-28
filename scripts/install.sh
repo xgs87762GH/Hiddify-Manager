@@ -7,7 +7,7 @@ if [ -f /opt/hiddify-manager/scripts/migrate_layout.sh ]; then
 fi
 NAME="0-install"
 LOG_FILE="$(log_file $NAME)"
-# Fix the installation directory
+# 修正安装目录
 if [ ! -d "/opt/hiddify-manager/" ] && [ -d "/opt/hiddify-server/" ]; then
     mv /opt/hiddify-server /opt/hiddify-manager
     ln -s /opt/hiddify-manager /opt/hiddify-server
@@ -19,21 +19,20 @@ fi
 
 export DEBIAN_FRONTEND=noninteractive
 if [ "$(id -u)" -ne 0 ]; then
-    echo 'This script must be run by root' >&2
+    echo '本脚本必须以 root 身份运行' >&2
     exit 1
 fi
 # ---------------------------------------------------------------------------------------------
-# Parallel steps with honest progress.
+# 并行执行各步骤，并如实反映进度。
 #
-#   add_task [-n UNITS] "Label" command args...   queue a step (UNITS: how many progress_tick calls
-#                                                  it makes in total, default 1; the last one is
-#                                                  made for it when the command returns)
-#   run_parallel FROM TO "Group"                  run everything queued at once; the bar moves from
-#                                                  FROM% to TO% by one unit each time a step ends
-#   progress_tick "Label"                         one unit done (for steps made of several parts)
+#   add_task [-n 单元数] "标签" 命令 参数...   排队一个步骤（单元数：该步骤总共会调用多少次
+#                                             progress_tick，默认 1；命令返回时还会为它计一次）
+#   run_parallel 起始百分比 结束百分比 "分组"   一次性运行所有已排队的步骤；每结束一个步骤，
+#                                             进度条从 起始 推进到 结束 一个单元
+#   progress_tick "标签"                       完成一个单元（用于由多部分组成的步骤）
 # ---------------------------------------------------------------------------------------------
 declare -a _TASK_LABELS=() _TASK_CMDS=() _TASK_UNITS=()
-# The steps that failed in any run_parallel: the install then ends with an error (after finishing the rest)
+# 任意一次 run_parallel 中失败的步骤：安装最后会以错误结束（但会先跑完其余步骤）
 declare -a FAILED_STEPS=()
 
 function add_task() {
@@ -64,7 +63,7 @@ function run_parallel() {
     export PROGRESS_DIR="$(mktemp -d)"
     echo 0 >"$PROGRESS_DIR/finished"
     : >"$PROGRESS_DIR/failed"
-    update_progress "${PROGRESS_GROUP}" "Starting ${#_TASK_LABELS[@]} steps in parallel" "$PROGRESS_FROM"
+    update_progress "${PROGRESS_GROUP}" "并行启动 ${#_TASK_LABELS[@]} 个步骤" "$PROGRESS_FROM"
 
     for i in "${!_TASK_LABELS[@]}"; do
         (
@@ -77,57 +76,56 @@ function run_parallel() {
     wait
 
     if [ -s "$PROGRESS_DIR/failed" ]; then
-        error "These steps reported an error: $(paste -sd, "$PROGRESS_DIR/failed")"
+        error "以下步骤报告了错误：$(paste -sd, "$PROGRESS_DIR/failed")"
         mapfile -t -O "${#FAILED_STEPS[@]}" FAILED_STEPS <"$PROGRESS_DIR/failed"
     fi
     rm -rf "$PROGRESS_DIR"
     _TASK_LABELS=() _TASK_CMDS=() _TASK_UNITS=()
 }
 
-# Certificates: the panel gets them (Let's Encrypt, then ZeroSSL; HAProxy answers the challenges) and renews them by
-# itself. Install / reinstall (including quick setup) waits here for every domain that needs a real certificate — not
-# only the first one — so all admin links can be HTTPS before "Finished!". Each issued cert is stored and loaded into
-# HAProxy immediately; cores are rebuilt via apply-users. Domains that fail stay self-signed and the Domains page
-# keeps retrying.
+# 证书：面板负责申请（先 Let's Encrypt，再 ZeroSSL；HAProxy 负责应答验证）并自行续期。
+# 安装/重装（含快速安装）会在这里等待所有需要正式证书的域名——不只是第一个——
+# 这样在"完成"之前所有管理员链接都能用 HTTPS。签发的证书会立即保存并加载进 HAProxy，
+# 核心通过 apply-users 重建；失败的域名保持自签，域名页面会继续重试。
 function wait_for_certificates() {
-    update_progress "${PROGRESS_ACTION}" "Getting certificates (Let's Encrypt / ZeroSSL)" 98
-    # No --first: that skipped the whole run once any domain already had a real cert, so new quick-setup domains
-    # never got one. With no flag, only domains that are still due are issued; already-valid ones are left alone.
+    update_progress "${PROGRESS_ACTION}" "正在申请证书（Let's Encrypt / ZeroSSL）" 98
+    # 不加 --first：一旦已有域名持有正式证书，它会跳过整轮，导致新快速安装的域名永远拿不到证书。
+    # 不加参数时，只处理仍待签发的域名，已有效的域名保持不动。
     local out rc=0
-    # stdout is the RenewSummary JSON; ACME logs go to stderr and stay visible in the install log
+    # stdout 是 RenewSummary JSON；ACME 日志走 stderr，仍会出现在安装日志里
     out=$(hiddify-panel-cli issue-certificates) || rc=$?
     echo "$out"
     if [ "$rc" == 3 ]; then
-        # Exit 3 = at least one certificate changed (already in HAProxy + apply-users). Refresh generated configs and
-        # hiddify-core once more through the installer path so a mid-install race cannot leave it stale.
+        # 退出码 3 = 至少一张证书发生变化（已写入 HAProxy 并触发 apply-users）。
+        # 再走一遍安装路径刷新生成的配置和 hiddify-core，避免安装中途的竞争留下旧配置。
         bash scripts/common/replace_variables.sh
         DO_NOT_INSTALL=true install_run services/hiddify-core
         rc=0
     fi
     if [ "$rc" != 0 ]; then
-        warning "Certificates could not be issued now; the panel keeps trying (Domains page)"
+        warning "当前无法签发证书；面板会继续尝试（见域名页面）"
         return
     fi
-    # Partial ACME failures still exit 0 (or 3 when something was issued): surface them so the log is clear.
+    # 部分 ACME 失败仍会返回 0（有签发成功时返回 3）：把失败数暴露出来，让日志更清楚。
     local failed
     failed=$(echo "$out" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(int(d.get("failed") or 0))' 2>/dev/null) || failed=0
     if [ "${failed:-0}" -gt 0 ]; then
-        warning "$failed domain certificate(s) could not be issued now; those stay self-signed until the Domains page retries"
+        warning "$failed 个域名的证书当前无法签发；在域名页面重试之前它们保持自签"
     fi
 }
 
 function main() {
-    update_progress "Please wait..." "We are going to install Hiddify..." 0
+    update_progress "请稍候……" "即将开始安装 Hiddify……" 0
     export ERROR=0
     
-    export PROGRESS_ACTION="Installing..."
+    export PROGRESS_ACTION="正在安装……"
     if [ "$MODE" == "apply_users" ];then
         export DO_NOT_INSTALL="true"
     elif [ -d "/hiddify-data-default/" ] && [ -z "$(ls -A /hiddify-data/ 2>/dev/null)" ]; then
         cp -r /hiddify-data-default/* /hiddify-data/
     fi
     if [ "$DO_NOT_INSTALL" == "true" ];then
-        PROGRESS_ACTION="Applying..."
+        PROGRESS_ACTION="正在应用……"
     fi
 
     export USE_VENV=313
@@ -138,47 +136,47 @@ function main() {
     if [ "$MODE" != "apply_users" ]; then
         clean_files
 
-        # 1) Common tools, redis and mysql (independent of each other)
-        add_task "Common tools and requirements" runsh install.sh scripts/common
+        # 1) 常用工具、Redis、MySQL（彼此独立）
+        add_task "常用工具与依赖" runsh install.sh scripts/common
         if [ "$DOCKER_MODE" != "true" ]; then
             add_task "Redis" install_run services/redis
             add_task "MySQL" install_run services/mysql
         fi
-        run_parallel 2 6 "Common Tools and Requirements"
+        run_parallel 2 6 "常用工具与依赖"
 
-        [ "$DOCKER_MODE" != "true" ] && install_run services/mysql # make sure mysql is running
-        # The panel needs them all (it generates the reality pair, ...)
-        update_progress "${PROGRESS_ACTION}" "Hiddify Panel" 7
+        [ "$DOCKER_MODE" != "true" ] && install_run services/mysql # 确保 MySQL 正在运行
+        # 面板依赖上面这些（它要生成 reality 密钥对等）
+        update_progress "${PROGRESS_ACTION}" "Hiddify 面板" 7
         install_run services/panel
     fi
 
-    # 2) Read the panel's configs
+    # 2) 读取面板中的配置
     if [ "$DO_NOT_RUN" != "true" ]; then
-        update_progress "HiddifyPanel" "Reading Configs from Panel..." 9
+        update_progress "Hiddify 面板" "正在从面板读取配置……" 9
         set_config_from_hpanel
 
-        update_progress "Applying Configs" "..." 11
+        update_progress "正在应用配置" "……" 11
         bash scripts/common/replace_variables.sh
     fi
 
-    # 3) All the services at once; the bar moves each time one of them finishes
+    # 3) 所有服务并行安装；每完成一个，进度条前进一次
     if [ "$MODE" != "apply_users" ]; then
         bash ./services/deprecated/remove_deprecated.sh
-        add_task "System settings" runsh run.sh scripts/common
-        add_task "Firewall" install_run services/firewall
-        add_task "Rpxy L4 (traffic splitting)" install_run services/rust-rpxy-l4
-        add_task "Haproxy" install_run services/haproxy
-        add_task "Personal SpeedTest" install_run services/speedtest "$(hconfig "speed_test")"
-        add_task "DNS Proxy" install_run services/dns_proxy "$(hconfig "dnstt_enable")"
-        # telemt serves MTProxy FakeTLS (telegram_enable) and the Telegram web proxy (telegram_webproxy_enable)
+        add_task "系统设置" runsh run.sh scripts/common
+        add_task "防火墙" install_run services/firewall
+        add_task "Rpxy L4（流量分流）" install_run services/rust-rpxy-l4
+        add_task "HAProxy" install_run services/haproxy
+        add_task "个人测速" install_run services/speedtest "$(hconfig "speed_test")"
+        add_task "DNS 代理" install_run services/dns_proxy "$(hconfig "dnstt_enable")"
+        # telemt 同时提供 MTProxy FakeTLS（telegram_enable）和 Telegram Web 代理（telegram_webproxy_enable）
         telegram_on=false
         [ "$(hconfig telegram_enable)" = "true" ] || [ "$(hconfig telegram_webproxy_enable)" = "true" ] && telegram_on=true
-        add_task "Telegram Proxy" install_run services/telegram "$telegram_on"
-        add_task "FakeTLS Proxy" install_run services/ssfaketls "$(hconfig "ssfaketls_enable")"
-        add_task "Warp" install_run services/warp 1
+        add_task "Telegram 代理" install_run services/telegram "$telegram_on"
+        add_task "FakeTLS 代理" install_run services/ssfaketls "$(hconfig "ssfaketls_enable")"
+        add_task "WARP" install_run services/warp 1
         add_task "Xray" install_run services/xray 1
     fi
-    add_task "Wireguard" install_run services/wireguard "$(hconfig "wireguard_enable")"
+    add_task "WireGuard" install_run services/wireguard "$(hconfig "wireguard_enable")"
     add_task "Hiddify Core" install_run services/hiddify-core
     add_task "Clash Meta" install_run services/clash
     run_parallel 11 98 "${PROGRESS_ACTION}"
@@ -186,70 +184,70 @@ function main() {
         wait_for_certificates
     fi
 
-    update_progress "${PROGRESS_ACTION}" "Almost Finished" 98
+    update_progress "${PROGRESS_ACTION}" "即将完成" 98
+    # 这一行是面板判定日志结束的标记（apply_api.py 的 FINISHED_MARK、result.html 的同一标记），请勿翻译
     echo "---------------------Finished!------------------------"
     remove_lock $NAME
-    update_progress "${PROGRESS_ACTION}" "Done" 100
-    # Restart the panel only when its code was (re)installed (install / update). Applying configs or users does not
-    # change the panel: it reads the new settings from the database (the caches are cleared when they change).
+    update_progress "${PROGRESS_ACTION}" "完成" 100
+    # 只有面板代码被（重新）安装（安装/更新）时才重启面板。应用配置或应用用户不会改变面板：
+    # 它直接从数据库读取新设置（设置变化时会清理缓存）。
     if [ "$DO_NOT_INSTALL" != "true" ]; then
         restart_hiddify_panel restart
     else
         restart_hiddify_panel start
     fi
     if [ ${#FAILED_STEPS[@]} -gt 0 ]; then
-        error "Finished with errors in: $(IFS=,; echo "${FAILED_STEPS[*]}") (see the log above)"
+        error "完成，但以下步骤出错：$(IFS=,; echo "${FAILED_STEPS[*]}")（详见上方日志）"
         return 1
     fi
 }
 
 function clean_files() {
     rm -rf data/log/xray*
-    # leftover jinja output from the old data/services layout
+    # 旧 data/services 布局遗留的 jinja 产物
     rm -rf /opt/hiddify-manager/data/services/xray/json/*.json
     rm -rf /opt/hiddify-manager/data/services/hiddify-core/json/*.json
     rm -rf /opt/hiddify-manager/data/services/haproxy/*.cfg
     find /opt/hiddify-manager/services/xray/configs /opt/hiddify-manager/services/hiddify-core/configs \
         -type f -name '*.json' ! -name '*.j2' -delete 2>/dev/null || true
-    # leftover in-tree files (not the generated/ symlinks)
+    # 目录内遗留文件（不是 generated/ 下的软链）
     rm -f /opt/hiddify-manager/services/rust-rpxy-l4/config.toml
     find ./ -type f -name "*.template" -exec rm -f {} \;
 }
 
 function cleanup() {
-    error "Script interrupted. Exiting..."
+    error "脚本被中断，正在退出……"
     # disable_ansii_modes
     remove_lock $NAME
     exit 9
 }
 
-# Trap the Ctrl+C signal and call the cleanup function
+# 捕获 Ctrl+C 并调用清理函数
 trap cleanup SIGINT
 
 function set_config_from_hpanel() {
     reload_all_configs >/dev/null
     if [[ $? != 0 ]]; then
-        error "Exception in Hiddify Panel. Please send the log to hiddify@gmail.com"
+        error "Hiddify 面板出现异常，请把日志发送到 hiddify@gmail.com"
         exit 4
     fi
     
     export SERVER_IP=$(curl --connect-timeout 1 -s https://v4.ident.me/)
-    # No probe when the kernel has IPv6 off: it cannot succeed.
+    # 内核关闭了 IPv6 时不做探测：不可能成功。
     export SERVER_IPv6=
     if [ -d /proc/sys/net/ipv6 ] && [ "$(cat /proc/sys/net/ipv6/conf/all/disable_ipv6 2>/dev/null)" != 1 ]; then
         SERVER_IPv6=$(curl --connect-timeout 1 -s https://v6.ident.me/)
     fi
 }
 
-# Install and run a service; returns non-zero when its install.sh or run.sh failed (run_parallel reports it).
+# 安装并运行一个服务；当它的 install.sh 或 run.sh 失败时返回非零（由 run_parallel 汇总报告）。
 function install_run() {
     echo "======================$1====================================={"
     local start_time=$(date +%s) rc=0
 
     if [ "$DO_NOT_INSTALL" != "true" ];then
         if [ "$DOCKER_MODE" == "true" ]; then
-            # Docker installs at image build, before the settings exist: install every service; the container start
-            # enables or disables each one.
+            # Docker 在构建镜像时安装，此时设置还不存在：安装所有服务，由容器启动时决定启用哪些。
             runsh install.sh "$1" || rc=$?
         else
             runsh install.sh "$@" || rc=$?
@@ -264,12 +262,12 @@ function install_run() {
 
     local end_time=$(date +%s)
     local duration=$((end_time - start_time))
-    [ "$rc" != 0 ] && error "$1 failed (exit code $rc)"
-    echo "}========================$1 (took ${duration}s)=============================="
+    [ "$rc" != 0 ] && error "$1 执行失败（退出码 $rc）"
+    echo "}========================$1（耗时 ${duration}s）=============================="
     return $rc
 }
 
-# Run a service's install.sh / run.sh (disable.sh when its setting is off); its exit code is returned.
+# 运行服务的 install.sh / run.sh（对应设置为关闭时改跑 disable.sh）；返回其退出码。
 function runsh() {
     local command=$1 rc=0
     if [[ $3 == "false" || $3 == "0" ]]; then
@@ -277,7 +275,7 @@ function runsh() {
     fi
     pushd "$2" >>/dev/null || return 1
     if [[ -f $command ]]; then
-        echo "===$command $2"
+        echo "=== $command $2"
         bash "$command" || rc=$?
     fi
     popd >>/dev/null
@@ -294,7 +292,7 @@ if [[ " $@ " == *" --no-gui "* ]]; then
         error_code=$?
     else
         main |& tee $LOG_FILE
-        error_code=${PIPESTATUS[0]} # main's, not tee's
+        error_code=${PIPESTATUS[0]} # 取 main 的退出码，而不是 tee 的
     fi
     remove_lock $NAME
 else
@@ -302,9 +300,9 @@ else
     error_code=$?
     if [[ $error_code != "0" ]]; then
         # echo less -r -P"Installation Failed! Press q to exit" +G "$log_file"
-        msg_with_hiddify "Installation Failed! $error_code"
+        msg_with_hiddify "安装失败！退出码 $error_code"
     else
-        msg_with_hiddify "The installation has successfully completed."
+        msg_with_hiddify "安装已成功完成。"
         check_hiddify_panel $@ |& tee -a $LOG_FILE
     fi
 fi

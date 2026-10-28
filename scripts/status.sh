@@ -15,18 +15,19 @@ function main(){
     
     # systemctl status --no-pager hiddify-xray hiddify-core hiddify-haproxy|cat
     
+    # WARP 未关闭时，先展示 WARP 状态
     if [[ $(hconfig "warp_mode") != "disable" ]];then
         echo -e "\n----------------------------------------------------------------"
         bash services/warp/status.sh
     fi
     
     echo "----------------------------------------------------------------"
-    warning "- Global IP:"
-    proxy_port=2000 # hiddify-core local socks5 port
+    warning "- 全局 IP："
+    proxy_port=2000 # hiddify-core 本地 socks5 端口
     curl -s -x socks://127.0.0.1:$proxy_port --connect-timeout 1 http://ip-api.com?fields=country,city,org,query | sed 's|^|  |; /[{}]/d'
     echo "----------------------------------------------------------------"
     
-    warning "- Services Status:"
+    warning "- 服务状态："
     
     for s in $(hiddify_service_units); do
         [ $s == "wg-quick@warp" ] && [ $(hconfig "warp_mode") == "disable" ] && continue

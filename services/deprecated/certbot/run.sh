@@ -32,6 +32,7 @@ for DOMAIN in $DOMAINS;	do
 	fi
 
 	if [[ $(dig +short -t a $DOMAIN.) ]];then
+		:
 		
 	fi
 	certbot certonly --standalone --http-01-port 80 --register-unsafely-without-email -d $DOMAIN --non-interactive --agree-tos --logs-dir /opt/hiddify-manager/data/log/system/

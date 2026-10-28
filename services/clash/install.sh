@@ -1,12 +1,13 @@
 #!/bin/bash
-# Clash Meta (Mihomo) client binary only — no systemd service.
-# Used by the panel config tester to run Clash YAML subscriptions natively.
+# 仅安装 Clash Meta（Mihomo）客户端二进制，不注册 systemd 服务。
+# 供面板的配置测试功能直接运行 Clash YAML 订阅。
 source /opt/hiddify-manager/scripts/common/utils.sh
 source /opt/hiddify-manager/scripts/common/package_manager.sh
 
-version="" # use specific version if needed otherwise it will use the latest
+version="" # 需要固定版本时在这里填写，留空则使用最新版本
 
-download_package clash mihomo.gz $version
+download_package clash mihomo.gz "$version" "" mihomo
+# 返回 0 表示本次执行了下载，或者二进制本身缺失，都需要重新解压安装。
 if [ "$?" == "0" ] || ! is_installed ./mihomo; then
     gunzip -f mihomo.gz || exit 1
     chown root:root mihomo || exit 2

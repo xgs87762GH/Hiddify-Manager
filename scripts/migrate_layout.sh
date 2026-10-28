@@ -1,8 +1,7 @@
 #!/bin/bash
-# After unzip -o of a new release over /opt/hiddify-manager, leftover v10
-# folders remain. If singbox/ still exists, this is an old layout: keep
-# MySQL/Redis passwords and move leftover folders to old/.
-# If singbox/ is gone, this is a clean install or an already-migrated tree.
+# 用 unzip -o 把新 release 覆盖到 /opt/hiddify-manager 后，会残留 v10 的目录。
+# 若 singbox/ 仍存在，说明还是旧布局：保留 MySQL/Redis 密码，并把残留目录移到 old/。
+# 若 singbox/ 已不存在，说明是全新安装或已迁移过的目录。
 
 set -euo pipefail
 
@@ -16,9 +15,9 @@ OLD="$HIDDIFY_DIR/old"
 
 log() { echo "[migrate-layout] $*"; }
 
-# Note: $DATA/mysql/db (the actual datadir) is intentionally not created here —
-# mysql/utils.sh's migrate_mysql_datadir needs that path absent or already
-# populated to do its atomic mv; see that file for details.
+# 注意：这里刻意不创建 $DATA/mysql/db（真正的数据目录）——
+# mysql/utils.sh 的 migrate_mysql_datadir 需要该路径不存在或已就绪才能做原子 mv；
+# 详见该文件。
 mkdir -p "$SERVICES/mysql" "$SERVICES/redis" \
     "$DATA/ssl" "$DATA/log/system" "$DATA/mysql" "$DATA/redis" \
     "$DATA/hiddify-panel" "$HIDDIFY_DIR/generated"
@@ -37,7 +36,7 @@ install_hiddify_cli() {
         if [ -f "$SCRIPTS/hiddify-profile.sh" ]; then
             ln -sf "$SCRIPTS/hiddify-profile.sh" /etc/profile.d/hiddify.sh
         fi
-        log "installed hiddify CLI -> /usr/bin/hiddify"
+        log "已安装 hiddify 命令行 -> /usr/bin/hiddify"
     fi
 }
 disable_all_services() {
@@ -46,9 +45,8 @@ disable_all_services() {
     tee /dev/stderr |
     xargs -r -I{} systemctl disable --now {}
 }
-# Stop a unit and make sure its process is really gone. Once the unit file is removed systemd can no
-# longer load (or stop) it, and a process left behind keeps its ports bound, which stops the
-# new-layout service that needs them from starting (old sing-box holding port 2000).
+# 停止单元并确认其进程真的消失。单元文件一旦被删除，systemd 就无法再加载（或停止）它，
+# 遗留进程会继续占用端口，导致需要这些端口的新布局服务起不来（旧 sing-box 占着 2000 端口）。
 stop_unit_and_confirm() {
     local unit="$1" pid cmd i
     systemctl disable --now "$unit" >/dev/null 2>&1 || systemctl stop "$unit" >/dev/null 2>&1 || true
@@ -57,10 +55,10 @@ stop_unit_and_confirm() {
     cmd="$(tr '\0' ' ' <"/proc/$pid/cmdline" 2>/dev/null || true)"
     case "$cmd" in
         *hiddify*|*xray*|*sing-box*|*haproxy*|*nginx*) ;;
-        *) log "not killing pid $pid ($cmd): it does not look like a hiddify process"
+        *) log "不结束进程 $pid（$cmd）：它看起来不是 hiddify 的进程"
            return 0 ;;
     esac
-    log "$unit did not stop, killing its leftover process $pid"
+    log "$unit 未能停止，正在结束其遗留进程 $pid"
     kill -TERM "$pid" 2>/dev/null || true
     for i in 1 2 3 4 5; do
         kill -0 "$pid" 2>/dev/null || break
@@ -76,42 +74,41 @@ stop_old_units() {
     for link in /etc/systemd/system/*.service; do
         [ -L "$link" ] || continue
         unit="$(basename "$link")"
-        # -m also canonicalizes dangling links, whose target no longer exists
+        # -m 也能规范化目标已不存在的悬空链接
         target="$(readlink -m "$link" 2>/dev/null || true)"
         case "$target" in
-            "$services_real"/*) continue ;; # current-layout unit: leave it alone
+            "$services_real"/*) continue ;; # 当前布局的单元：不要动
             "$hid_dir_real"/*|/opt/hiddify-server/*|/opt/hiddify-config/*) ;;
-            *) continue ;;                  # not managed by hiddify
+            *) continue ;;                  # 不是 hiddify 管理的
         esac
-        # Stop while the unit can still be resolved: once its file/target is
-        # gone, systemd can no longer load it and the old process would keep
-        # running (and holding its ports) until the next reboot.
-        log "stopping leftover unit $unit"
+        # 要在单元还能被解析时停止：一旦其文件/目标消失，systemd 就无法加载它，
+        # 旧进程会继续运行（并占着端口）直到下次重启。
+        log "正在停止遗留单元 $unit"
         stop_unit_and_confirm "$unit"
         rm -f "/etc/systemd/system/multi-user.target.wants/$unit" "$link"
         removed=1
     done
-    # stale enable links whose unit file is already gone
+    # 单元文件已消失、但启用链接仍残留的情况
     for link in /etc/systemd/system/multi-user.target.wants/*.service; do
         [ -L "$link" ] || continue
         target="$(readlink -m "$link" 2>/dev/null || true)"
         case "$target" in
             "$services_real"/*) ;;
             "$hid_dir_real"/*|/opt/hiddify-server/*|/opt/hiddify-config/*)
-                log "removing stale enable link $(basename "$link")"
+                log "正在删除残留的启用链接 $(basename "$link")"
                 rm -f "$link"
                 removed=1
                 ;;
         esac
     done
     if [ "$removed" = 1 ]; then
-        systemctl daemon-reload 2>/dev/null || true # make systemd forget the units just removed
+        systemctl daemon-reload 2>/dev/null || true # 让 systemd 忘掉刚删除的单元
     fi
 }
 
 rename_singbox_unit() {
     if [ -e /etc/systemd/system/hiddify-singbox.service ] || [ -L /etc/systemd/system/hiddify-singbox.service ]; then
-        log "replacing hiddify-singbox.service with hiddify-core.service"
+        log "正在用 hiddify-core.service 替换 hiddify-singbox.service"
         stop_unit_and_confirm hiddify-singbox.service
         rm -f /etc/systemd/system/hiddify-singbox.service
     fi
@@ -127,7 +124,7 @@ move_to_old() {
     local name
     name="$(basename "$path")"
     if [ -L "$path" ]; then
-        log "removing leftover symlink $path"
+        log "正在删除残留的软链 $path"
         rm -f "$path"
         return 0
     fi
@@ -139,25 +136,23 @@ move_to_old() {
     if [ -e "$dest" ]; then
         dest="$OLD/${name}.$(date +%Y%m%d%H%M%S)"
     fi
-    log "mv $path -> $dest"
+    log "移动 $path -> $dest"
     mv "$path" "$dest"
 }
 
-# Stop leftover old-layout services before their directories are moved away;
-# otherwise their unit files turn into dangling symlinks, systemd cannot load
-# them anymore, and the old processes keep running with their ports bound
-# (which blocks the new-layout services from starting).
+# 在目录被移走之前先停掉旧布局的残留服务；否则它们的单元文件会变成悬空软链，
+# systemd 再也无法加载，旧进程会继续运行并占用端口（从而阻塞新布局的服务启动）。
 stop_old_units
 
-# Clean install or already migrated: no leftover singbox/ directory.
+# 全新安装或已迁移：没有残留的 singbox/ 目录。
 if [ ! -d "$HIDDIFY_DIR/singbox" ] || [ -L "$HIDDIFY_DIR/singbox" ]; then
     disable_all_services
 
     if [ -L "$HIDDIFY_DIR/singbox" ]; then
-        log "removing leftover singbox symlink"
+        log "正在删除残留的 singbox 软链"
         rm -f "$HIDDIFY_DIR/singbox"
     fi
-    # acme.sh --upgrade can recreate the old working dir after migration.
+    # acme.sh --upgrade 可能在迁移后重建旧工作目录。
     move_to_old "$HIDDIFY_DIR/acme.sh"
     
     rename_singbox_unit
@@ -165,9 +160,9 @@ if [ ! -d "$HIDDIFY_DIR/singbox" ] || [ -L "$HIDDIFY_DIR/singbox" ]; then
     exit 0
 fi
 
-log "singbox/ found; migrating leftover old-layout folders to old/"
+log "检测到 singbox/，正在把残留的旧布局目录迁移到 old/"
 
-# Reuse service helpers when available (same create-once paths under data/)
+# 可用时复用服务辅助函数（data/ 下同样的一次性生成路径）
 if [ -f "$SCRIPTS/common/utils.sh" ]; then
     # shellcheck source=/dev/null
     source "$SCRIPTS/common/utils.sh"
@@ -196,7 +191,7 @@ preserve_mysql_pass() {
         if [ -f "$src" ]; then
             cp -a "$src" "$dest"
             chmod 600 "$dest"
-            log "kept MySQL password from $src -> $dest"
+            log "已从 $src 保留 MySQL 密码 -> $dest"
             return 0
         fi
     done
@@ -221,7 +216,7 @@ preserve_redis_pass() {
             pass="$(grep '^requirepass ' "$src" 2>/dev/null | awk '{print $2}' | tail -n1 || true)"
         fi
         if [ -n "$pass" ]; then
-            log "kept Redis password from $src"
+            log "已从 $src 保留 Redis 密码"
             break
         fi
     done
@@ -240,7 +235,7 @@ for name in nginx haproxy singbox xray hiddify-panel acme.sh other ssl log mysql
     move_to_old "$HIDDIFY_DIR/$name"
 done
 
-# v10 common/ is leftover; keep only the packaged download.sh shim if present.
+# v10 的 common/ 是残留物；仅在存在打包的 download.sh 兼容层时保留它。
 if [ -d "$HIDDIFY_DIR/common" ] && [ ! -L "$HIDDIFY_DIR/common" ]; then
     if [ -f "$HIDDIFY_DIR/common/utils.sh" ] || [ -f "$HIDDIFY_DIR/common/install.sh" ]; then
         shim=""
