@@ -20,7 +20,13 @@ apply_users() {
     echo "正在重载服务"
     ensure_generated_permissions
     local pids=() rc=0 pid
-    for svc in xray hiddify-core wireguard telegram/telemt; do 
+    local services=(xray hiddify-core wireguard)
+    # telemt 的 systemd 单元只在开启 telegram 时才安装；没开启就跳过，否则每次
+    # "应用用户"都会因为启动一个不存在的单元而失败。
+    case "$(hconfig telegram_enable 2>/dev/null)" in
+        true|1) services+=(telegram/telemt) ;;
+    esac
+    for svc in "${services[@]}"; do
         echo "正在重载 $svc"
         run_timed "$svc" bash "$HIDDIFY_SERVICES/$svc/reload.sh" "$1" &
         pids+=("$!")
