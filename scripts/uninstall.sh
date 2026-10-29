@@ -15,7 +15,10 @@ function main(){
         # 一律使用绝对路径：销毁性删除不能依赖当前目录。
         rm -rf /opt/hiddify-manager/services/panel
         apt-get purge -y nginx gunicorn mariadb-* #python3-pip python3
-        rm -rf /opt/hiddify-manager/*
+        # 必须删整个目录：`*` 不匹配 dotfile，残留 .git 会让 onekey install
+        # 误判为 git 检出转 update，而 scripts/ 已删，陷入死锁。
+        cd / || { echo "无法切换到 /" >&2; exit 1; }
+        rm -rf /opt/hiddify-manager
         echo "已彻底卸载 Hiddify 面板"
     fi
 }
