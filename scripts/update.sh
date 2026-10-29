@@ -80,7 +80,7 @@ function update_from_git() {
 
     cd "$HIDDIFY_DIR" || return 1
     update_progress "Hiddify 更新器" "正在获取 $remote/$branch" 25
-    git fetch --prune "$remote" "$branch" || { error "git fetch $remote/$branch 失败"; return 1; }
+    git fetch --no-recurse-submodules --prune "$remote" "$branch" || { error "git fetch $remote/$branch 失败"; return 1; }
 
     local local_head remote_head
     local_head=$(git rev-parse HEAD)

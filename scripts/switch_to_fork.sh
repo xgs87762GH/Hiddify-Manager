@@ -85,7 +85,7 @@ update_from_git() {
     cd "$ROOT" || die "无法进入 $ROOT"
     add_safe_directories
     log "正在拉取 $BRANCH"
-    git fetch --prune origin "$BRANCH" || die "git fetch 失败"
+    git fetch --no-recurse-submodules --prune origin "$BRANCH" || die "git fetch 失败"
     git merge --ff-only "origin/$BRANCH" || die "无法快进合并，请手动处理：cd $ROOT && git status"
     add_safe_directories
     git submodule update --init --recursive || {
@@ -132,11 +132,11 @@ switch_to_fork() {
     add_safe_directories
 
     log "正在从你的 fork 拉取 $BRANCH"
-    git fetch --prune origin "$BRANCH" || die "无法拉取 $FORK_URL（$BRANCH）"
+    git fetch --no-recurse-submodules --prune origin "$BRANCH" || die "无法拉取 $FORK_URL（$BRANCH）"
     # 先记下来：后面拉取 upstream 会覆盖 FETCH_HEAD
     local fork_commit
     fork_commit=$(git rev-parse FETCH_HEAD)
-    git fetch --prune upstream "$BASE" >/dev/null 2>&1 || warn "无法拉取上游 $BASE（将跳过差异对比）"
+    git fetch --no-recurse-submodules --prune upstream "$BASE" >/dev/null 2>&1 || warn "无法拉取上游 $BASE（将跳过差异对比）"
 
     log "检出 $BRANCH（仅跟踪的文件）"
     git reset --hard "$fork_commit" || die "检出失败"
