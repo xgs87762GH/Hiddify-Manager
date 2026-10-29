@@ -19,9 +19,9 @@ PrivateTmp=yes
 LimitNOFILE=65535
 PrivateDevices=yes
 ProtectHome=yes
-# 这里曾经写的是已废弃的 `ReadOnlyDirectories=/`：在一些内核/systemd 组合上它会让单元
-# 直接起不来（status=226/NAMESPACE，见 #…）。等价的现代表达是 ProtectSystem=strict
-# （整棵树只读）+ 下面这份 ReadWritePaths 白名单。
+# 这里曾经写的是已废弃的 `ReadOnlyDirectories=/`（把整棵树变只读）。在部分内核/systemd 组合上
+# 它会让单元直接起不来（status=226/NAMESPACE），下面改用 ProtectSystem=full：只读 /usr /boot
+# /etc，配合这份 ReadWritePaths 白名单 —— 这也是单元尾部注释推荐的做法。
 ReadWritePaths=-/var/lib/redis
 ReadWritePaths=-/var/log/redis
 ReadWritePaths=-/var/run/redis
@@ -41,8 +41,8 @@ RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 # redis-server can write to its own config file when in cluster mode so we
 # permit writing there by default. If you are not using this feature, it is
 # recommended that you replace the following lines with "ProtectSystem=full".
-# strict（而不是 true/full）：只读整棵树，只有上面的 ReadWritePaths 可写。
-ProtectSystem=strict
+# true == full：只读 /usr /boot /etc（不碰整棵树，避免上面的 226/NAMESPACE）。
+ProtectSystem=true
 ReadWritePaths=-/etc/redis
 
 [Install]
