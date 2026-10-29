@@ -256,7 +256,10 @@ scenario_d() {
     # GitHub Actions 的镜像在 /etc/gitconfig 里写了 safe.directory = *，
     # 光清掉 ~/.gitconfig 还不够——root 读任何仓库都不会报 ownership 错误，
     # fixture 就复现不出来。这里把系统级配置也摘掉，才算真正"新装机器"。
-    export GIT_CONFIG_SYSTEM=/dev/null
+    # 用一个真正的空文件而不是 /dev/null：某些环境/版本上 git 读 /dev/null 会报
+    # "bad config line 1"，而这个变量会一直导出到后面的断言里，把 git 调用全搞坏。
+    export GIT_CONFIG_SYSTEM="$WORK/empty-gitconfig"
+    : > "$GIT_CONFIG_SYSTEM"
 
     local out1 out2 control
     control=$(cd "$ROOT" && git -C services/panel/src rev-parse HEAD 2>&1)
