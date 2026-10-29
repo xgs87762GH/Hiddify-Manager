@@ -42,6 +42,21 @@ function is_panel_redis_external() {
     return 1
 }
 
+# MariaDB 以 --user=mysql 运行，datadir 却位于 data/ 之下，历史上会被整树
+# chown 给 hiddify-panel 波及。属主错误平时不报错——mariadbd 以 root 启动时已预
+# 打开数据文件——但下一次重启后整库不可读（表现为 "Table ... doesn't exist"），
+# 而且 update.sh 的备份步骤会先失败，用户连面板的"更新"按钮都无法自愈。
+# 幂等且只 stat 一次，可在每次安装/更新前调用。
+function ensure_mysql_datadir_owner() {
+    local datadir="${HIDDIFY_MYSQL_DATADIR:-${HIDDIFY_DATA:-$HIDDIFY_DIR/data}/mysql/db}"
+    [ -d "$datadir" ] || return 0
+    [ "$(stat -c '%U' "$datadir" 2>/dev/null)" = "mysql" ] && return 0
+    echo "修复 MariaDB 数据目录属主（应属 mysql）：$datadir"
+    chown -R mysql:mysql "$datadir" 2>/dev/null || true
+    find "$datadir" -type d -exec chmod 700 {} + 2>/dev/null || true
+    find "$datadir" -type f -exec chmod 660 {} + 2>/dev/null || true
+}
+
 # 备份是完整数据库导出（含密钥、用户 ID）：属主为面板用户，且不可被其他人读取。
 # hiddify-panel-cli backup 以 hiddify-panel 身份运行，因此 root 属主的目录
 #（例如面板曾以 root 运行留下）会让每次备份都报 "Permission denied"。

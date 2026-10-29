@@ -13,7 +13,9 @@ chsh hiddify-panel -s /bin/bash
 chown -R hiddify-panel:hiddify-panel /home/hiddify-panel/ >/dev/null 2>&1
 localectl set-locale LANG=C.UTF-8 >/dev/null 2>&1
 su hiddify-panel -c update-locale LANG=C.UTF-8 >/dev/null 2>&1
-chown -R hiddify-panel:hiddify-panel . >/dev/null 2>&1
+# 必须用显式路径：`.` 依赖调用方的 cwd，一旦在 $HIDDIFY_DIR 而不是 services/panel
+# 下执行，就会把 data/mysql（MariaDB datadir，须属 mysql）等整棵树一起 chown 走。
+chown -R hiddify-panel:hiddify-panel "${HIDDIFY_DIR:-/opt/hiddify-manager}/services/panel" >/dev/null 2>&1
 # 为 hiddify-panel 用户自动激活 Python 虚拟环境（已存在则跳过）
 if ! grep -Fxq "source /opt/hiddify-manager/.venv313/bin/activate" "/home/hiddify-panel/.bashrc" && ! grep -Fxq "export PATH=/opt/hiddify-manager/.venv313/bin:\$PATH" "/home/hiddify-panel/.bashrc"; then
     echo "source /opt/hiddify-manager/.venv313/bin/activate" >> "/home/hiddify-panel/.bashrc"

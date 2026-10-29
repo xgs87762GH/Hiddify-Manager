@@ -52,6 +52,22 @@ if ! declare -F add_safe_directories >/dev/null; then
     }
 fi
 
+# MariaDB 以 --user=mysql 运行，datadir 却在 data/ 下，历史上会被整树 chown 给
+# hiddify-panel 波及。属主错误平时不报错（mariadbd 以 root 启动时已预打开数据
+# 文件），但重启后整库不可读，且本脚本的备份步骤会先失败——用户连"更新"按钮
+# 都无法自愈。和上面两个函数一样自带一份，兼容尚未包含它的 utils.sh。
+if ! declare -F ensure_mysql_datadir_owner >/dev/null; then
+    function ensure_mysql_datadir_owner() {
+        local datadir="${HIDDIFY_MYSQL_DATADIR:-${HIDDIFY_DATA:-$HIDDIFY_DIR/data}/mysql/db}"
+        [ -d "$datadir" ] || return 0
+        [ "$(stat -c '%U' "$datadir" 2>/dev/null)" = "mysql" ] && return 0
+        echo "修复 MariaDB 数据目录属主（应属 mysql）：$datadir"
+        chown -R mysql:mysql "$datadir" 2>/dev/null || true
+        find "$datadir" -type d -exec chmod 700 {} + 2>/dev/null || true
+        find "$datadir" -type f -exec chmod 660 {} + 2>/dev/null || true
+    }
+fi
+
 # 本脚本是从 /tmp 中的副本运行的（见下方重新执行那段），因此"更新"本身无法改变
 # 正在干活的这份代码：新提交里的修复只会在下次运行生效。这里改为取出分支上的
 # 版本并交接给它，让本脚本仅凭面板上的"更新"按钮就能自我修复。
@@ -94,6 +110,7 @@ function update_from_git() {
     hand_over_to_new_script "$remote/$branch" --no-gui "$@"
 
     update_progress "Hiddify 更新器" "正在创建备份" 10
+    ensure_mysql_datadir_owner
     (cd "$HIDDIFY_DIR" && ./services/panel/backup.sh) || { error "备份失败，已中止更新"; return 1; }
     cd "$HIDDIFY_DIR" || return 1
     if [[ "$local_head" == "$remote_head" ]]; then
@@ -185,6 +202,7 @@ function main() {
     rm -rf sniproxy caddy
     update_progress "Hiddify 更新器" "正在创建备份" 5
     echo "正在创建备份……"
+    ensure_mysql_datadir_owner
     if ! ./services/panel/backup.sh; then
         error "备份失败；没有新备份时不允许更新"
         remove_lock $NAME
