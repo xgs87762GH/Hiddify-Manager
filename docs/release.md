@@ -118,12 +118,14 @@ unzip -l /tmp/hm.zip | grep services/panel/src/hiddifypanel/VERSION.py   # 应�
 
 ## 6. 服务器怎么吃到这个版本
 
-| 服务器状态 | 行为 |
+统一走 `onekey.sh`（`$OK` = `https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh`）：
+
+| 服务器状态 | 命令 / 行为 |
 | --- | --- |
-| 任意状态，一条命令 | `onekey.sh update`（已装）/ `onekey.sh version v14.1.0b3`（指定版本） |
-| git checkout（`dev-custom`） | 面板点"更新"或 `bash scripts/update.sh` → `git fetch` + `merge --ff-only` fork，随后 `make build` |
+| 任意状态，一条命令 | `bash <(curl -fsSL $OK) update`（已装）/ `bash <(curl -fsSL $OK) version v14.1.0b3 -y`（指定版本） |
+| git checkout（`dev-custom`） | 面板点"更新"或 `bash <(curl -fsSL $OK) update` → `git fetch` + `merge --ff-only` fork，随后 `make build` |
 | 非 git（官方 zip 安装） | 面板点"更新" → 按 `package_mode` 查 fork 的 release → 下载本 fork 的 `hiddify-manager.zip` 覆盖，面板源码再从 fork 克隆 |
-| 指定版本安装 | `bash scripts/common/download.sh v14.1.0b3`（tag 必须存在于本 fork） |
+| 指定版本安装 | `bash <(curl -fsSL $OK) version v14.1.0b3 -y`（tag 必须存在于本 fork） |
 
 非 git 安装想长期稳，建议一次性转成 checkout：见 [升级 §4](server-update.md)。
 
@@ -132,7 +134,10 @@ unzip -l /tmp/hm.zip | grep services/panel/src/hiddifypanel/VERSION.py   # 应�
 ## 7. 回滚
 
 ```bash
-# 代码回滚到本 fork 的某个 tag（不动数据）
+# 代码回滚到本 fork 的某个 tag（不动数据）—— 一条命令，git 检出同样可用
+bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh) version v14.1.0b2 -y
+
+# 等价的手工写法
 cd /opt/hiddify-manager
 git fetch --tags origin
 git checkout v14.1.0b2

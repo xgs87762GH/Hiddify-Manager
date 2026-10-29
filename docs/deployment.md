@@ -15,8 +15,23 @@
 | Docker | 要隔离（**仍属实验性**） | 见 [DOCKER.md](DOCKER.md) |
 
 > **不要用官方一键脚本 `bash <(curl https://i.hiddify.com/beta)`**：它装的是官方代码，
-> 后续升级会去拉官方仓库。本 fork 的安装入口只有两个：`scripts/onekey.sh install`，
-> 或等价的 `git clone --recurse-submodules` + `scripts/install.sh`。
+> 后续升级会去拉官方仓库。本 fork 的安装入口只有一个：**`onekey.sh install`**
+> （等价的手动写法是 `git clone --recurse-submodules` + `scripts/install.sh`）。
+
+### 一条命令速查
+
+```bash
+OK=https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh
+
+sudo -i
+bash <(curl -fsSL $OK) install             # 全新安装
+bash <(curl -fsSL $OK) update              # 升级（会先备份）
+bash <(curl -fsSL $OK) reinstall           # 按当前代码重装服务
+bash <(curl -fsSL $OK) version v14.2.4 -y  # 切到指定版本（升/降）
+bash <(curl -fsSL $OK) switch              # 官方版本 → 转本 fork（只跑一次）
+```
+
+后续操作（升级、切版本）都在这条命令上，细节见 [升级](server-update.md)。
 > Docker 支持还没稳定：进程模型仍是 python-systemctl shim，默认 profile 要 privileged + host network。
 
 ---

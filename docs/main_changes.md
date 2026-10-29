@@ -23,7 +23,8 @@
 - **Supported systems**: Ubuntu 22.04, 24.04 and 26.04, and Docker (**experimental** — see [docs/DOCKER.md](DOCKER.md)).
 - **External database**: the panel can use a remote MySQL/MariaDB or Redis instead of the installed local ones — see [docs/EXTERNAL_DATABASE.md](EXTERNAL_DATABASE.md).
 - Docker（本 fork 的 beta 镜像）：`bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/common/docker-installer.sh) beta`
-- Direct installation（本 fork）：`git clone --recurse-submodules -b dev-custom https://github.com/xgs87762GH/Hiddify-Manager.git /opt/hiddify-manager && cd /opt/hiddify-manager && bash scripts/install.sh --no-gui`，见 [deployment.md](deployment.md)
+- Direct installation（本 fork，一条命令）：`bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh) install`
+- 升级 / 切版本（同一条命令换个参数）：`bash <(curl -fsSL .../onekey.sh) update` / `... version v14.2.4 -y`，见 [deployment.md](deployment.md) 与 [server-update.md](server-update.md)
 
 
 > ⚠️ **Before upgrading**: take a full backup, and see [section 2](#2-breaking-changes--upgrade-notes-read-before-upgrading).

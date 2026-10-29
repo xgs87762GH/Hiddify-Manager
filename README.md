@@ -55,15 +55,19 @@ bash <(curl -fsSL "$ONEKEY") install
 | --- | --- |
 | `update` | 升级（备份 → ff-only 快进 fork → 子模块 → `make build`） |
 | `reinstall` | 按当前代码重装全部服务（不拉新代码） |
-| `version v14.1.0b3` | 装指定发布版本（仅非 git 安装；会覆盖 `/opt` 下被跟踪的文件） |
+| `version v14.2.4 -y` | 切到指定发布版本（**git 检出同样可用**：强制换代码，保留 `data/`、`generated/` 与虚拟环境） |
 | `switch` | 机器上已是官方版本 → 转成本 fork 的 git 检出 |
 
 用法就是把 `install` 换掉，例如：
 
 ```bash
 bash <(curl -fsSL "$ONEKEY") update
-bash <(curl -fsSL "$ONEKEY") version v14.1.0b3
+bash <(curl -fsSL "$ONEKEY") reinstall
+bash <(curl -fsSL "$ONEKEY") version v14.2.4 -y
 ```
+
+> `onekey.sh` 每次都是**从 GitHub 现取**的：老机器也能立刻拿到最新修复。
+> 切版本时**不要**用 `git clean -fdx` 手动清理，它会连 `data/` 一起删掉。
 
 ### 手动部署（与 `install` 等价）
 

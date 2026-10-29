@@ -6,6 +6,28 @@
 
 ---
 
+## 0. 一条命令速查（日常就用这些）
+
+所有生命周期操作都走 `onekey.sh`，**不用先 `cd /opt/hiddify-manager`**：
+
+```bash
+OK=https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh
+
+sudo -i
+bash <(curl -fsSL $OK) install             # 全新安装
+bash <(curl -fsSL $OK) update              # 升级到 dev-custom 最新（会先备份）
+bash <(curl -fsSL $OK) reinstall           # 按当前代码重装服务（不拉新代码）
+bash <(curl -fsSL $OK) version v14.2.4 -y  # 切到指定版本（升/降都走这条）
+bash <(curl -fsSL $OK) switch              # 官方 release 安装 → 转本 fork（只跑一次）
+```
+
+- `onekey.sh` 是**从 GitHub 现取**的：老服务器也能立刻拿到最新修复，不必先升级脚本本身。
+- 面板里点「更新」走的是同一条链路（服务器本地的 `scripts/update.sh`）。
+- 已装好的机器上也可以直接跑本地副本（不联网取引导脚本）：
+  `bash /opt/hiddify-manager/scripts/onekey.sh update`。
+
+---
+
 ## 1. 先看自己是哪种状态
 
 ```bash
@@ -19,9 +41,11 @@ free -h                         # 构建 UI 需要 ~1.2G 空闲内存或 swap
 
 | 服务器状态 | 走哪节 / 命令 |
 | --- | --- |
-| `git status` 正常，分支 `dev-custom` | 第 3 / 4 节：`bash scripts/update.sh` |
-| `git status` 正常，分支是别的名字 | 先 `git checkout dev-custom`，再 `bash scripts/update.sh` |
-| 没有 `.git`（官方 release 安装） | 第 4 节：`switch_to_fork.sh`（只跑一次） |
+| `git status` 正常，分支 `dev-custom` | 第 3 节：`bash <(curl -fsSL $OK) update` |
+| `git status` 正常，分支是别的名字 | 先 `git checkout dev-custom`，再同上 |
+| 没有 `.git`（官方 release 安装） | 第 4 节：`bash <(curl -fsSL $OK) switch`（只跑一次） |
+
+> `$OK` = `https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh`（见第 0 节）。
 
 ---
 
@@ -99,10 +123,16 @@ bash scripts/tests/smoke_update.sh 3    # 或指定轮数
 
 | 你现在的状态 | 用哪条 |
 | --- | --- |
-| 还是官方 release（没有 `.git`）——**首次**转 fork | `switch_to_fork.sh`（只跑一次） |
-| **已经是** fork / `dev-custom` checkout——日常升级 | `scripts/update.sh`（以后都用它） |
+| 还是官方 release（没有 `.git`）——**首次**转 fork | `bash <(curl -fsSL $OK) switch`（只跑一次） |
+| **已经是** fork / `dev-custom` checkout——日常升级 | `bash <(curl -fsSL $OK) update`（以后都用它） |
 
 ### 首次转换（官方 → fork）
+
+```bash
+bash <(curl -fsSL $OK) switch
+```
+
+等价的专用脚本（`switch` 子命令内部就是调它）：
 
 ```bash
 bash <(curl -sSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/refs/heads/dev-custom/scripts/switch_to_fork.sh)
@@ -118,8 +148,7 @@ bash /tmp/sw.sh
 ### 不是首次（已转过 fork，日常升级）
 
 ```bash
-cd /opt/hiddify-manager
-bash scripts/update.sh
+bash <(curl -fsSL $OK) update
 ```
 
 面板里点「更新」也可以，git checkout 时同样会走 `update.sh` 这条链路。细节见第 3 节。
@@ -217,9 +246,17 @@ git -C services/panel/src log --oneline -1
 
 ---
 
-## 7. 回滚
+## 7. 回滚 / 切到指定版本
 
-代码回滚（不动数据）：
+**首选一条命令**（git 检出同样可用：`onekey.sh version` 会强制换掉代码，
+但保留 `data/`、`generated/` 与虚拟环境，等于"换代码留数据"）：
+
+```bash
+git ls-remote --tags origin | tail -20        # 看看有哪些版本
+bash <(curl -fsSL $OK) version v14.2.4 -y     # 切过去
+```
+
+手工写法（不联网取引导脚本时）：
 
 ```bash
 cd /opt/hiddify-manager
@@ -228,6 +265,10 @@ git reset --hard <上一个提交>
 git submodule update --init --recursive
 make build
 ```
+
+> **数据库迁移不可逆**：降级到更早的大版本（如 14.2.5 → 13.x）即使代码切成功，
+> 面板也会因为 `db_version` 过高而 502。跨大版本降级必须先回滚**该版本对应的数据库备份**。
+> **绝不要**用 `git clean -fdx` 来"清理"：它会把 `data/` 一起删掉。
 
 数据回滚用面板"备份"页里 `backup.sh` 生成的那份，或首次转换时的
 `/opt/hiddify-manager.bak.<时间戳>` 全量快照。

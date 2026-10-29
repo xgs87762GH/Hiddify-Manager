@@ -9,12 +9,12 @@ packages:
   - software-properties-common
   - git
 runcmd:
-  - cd /opt
-  - git clone https://github.com/hiddify/hiddify-manager/
-  - cd hiddify-manager
+  # 只装本 fork：官方一键脚本会装官方代码，之后升级会去拉官方仓库。
+  # cloud-init 的 runcmd 走 /bin/sh，没有 bash 的 <( ) 进程替换，所以先下载再执行。
+  - curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh -o /tmp/onekey.sh
+  - bash /tmp/onekey.sh install -y
   # uncomment it for using a special secret otherwise it will be createed automatically/
   #- echo "USER_SECRET=44da16ea20ff4bac92afae43ef97f067" >config.env
   #- echo "MAIN_DOMAIN=example.com" >>config.env
-  - bash scripts/install.sh
 
 # please open http://yourip/ or https://yourip.sslip.io within the one hour after setuping your server
