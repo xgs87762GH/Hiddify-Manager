@@ -56,6 +56,11 @@ services/panel/celerybeat-schedule
 # rendered from a .j2 next to it
 scripts/common/run.sh
 services/ssfaketls/hiddify-ss-faketls.service
+services/warp/wireguard/install.sh
+services/warp/wireguard/run.sh
+# install.sh deletes every *.template in the tree as leftover, so tracking any of
+# them only leaves the work tree permanently "deleted" after each install.
+*.template
 scripts/common/__pycache__/commander.cpython-313.pyc
 scripts/common/__pycache__/jinja.cpython-313.pyc
 
