@@ -29,7 +29,8 @@ install_hiddify_cli() {
         mkdir -p /etc/bash_completion.d /etc/profile.d
         if [ -f "$SCRIPTS/hiddify-completion.bash" ]; then
             ln -sf "$SCRIPTS/hiddify-completion.bash" /etc/bash_completion.d/hiddify
-            if [ -f "$HOME/.bashrc" ] && ! grep -qF 'hiddify-completion.bash' "$HOME/.bashrc"; then
+            # set -u：面板更新/systemd 场景下 HOME 可能未导出，不能直接解引用。
+            if [ -n "${HOME:-}" ] && [ -f "$HOME/.bashrc" ] && ! grep -qF 'hiddify-completion.bash' "$HOME/.bashrc"; then
                 echo '[ -f /opt/hiddify-manager/scripts/hiddify-completion.bash ] && . /opt/hiddify-manager/scripts/hiddify-completion.bash' >>"$HOME/.bashrc"
             fi
         fi
