@@ -99,11 +99,17 @@ confirm() {
     case "$a" in y|Y|yes) return 0 ;; *) die "已取消" ;; esac
 }
 
-# git 会拒绝属于其他用户的仓库（dubious ownership），该例外按目录生效、不递归，
-# 而 $ROOT 及其子模块会被 root 和 hiddify-panel 同时写入。
+# git 会拒绝属于其他用户的仓库（dubious ownership），该例外按目录生效、不递归：
+# $ROOT 会被 root 和 hiddify-panel 同时写入，面板子模块及它内部嵌套的仓库
+# （services/panel/src/hiddifypanel/user_front）各自都是独立仓库，需各自加例外，
+# 否则切版本会停在 "Unable to find current revision in submodule path"。
+# 与 scripts/common/utils.sh、scripts/switch_to_fork.sh 保持同一实现（$HIDDIFY_DIR→$ROOT、
+# warning→warn）；那两处由 scripts/tests/smoke_update.sh 回归。改动时三处同步。
 add_safe_directory() {
     local dir="${1%/}"
     [ -n "$dir" ] || return 0
+    # 全局（当前用户）与系统（root）配置都尽力注册；任一不可写就跳过，真正的兜底是
+    # add_safe_directories 导出的 GIT_CONFIG_*，它不依赖配置文件、随进程树继承。
     git config --global --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" || \
         git config --global --add safe.directory "$dir" 2>/dev/null
     git config --system --get-all safe.directory 2>/dev/null | grep -Fxq "$dir" || \
@@ -112,17 +118,26 @@ add_safe_directory() {
 
 add_safe_directories() {
     local d dirs=()
+    # 先标记 manager 与面板子模块：submodule foreach 本身可能因属主问题失败。
     dirs+=("$ROOT" "$ROOT/services/panel/src")
     while IFS= read -r d; do
         [ -n "$d" ] || continue
-        dirs+=("$ROOT/$d")
+        # 相对路径（.gitmodules）补 $ROOT；foreach 给的是绝对路径，直接用。
+        case "$d" in
+            /*) dirs+=("$d") ;;
+            *) dirs+=("$ROOT/$d") ;;
+        esac
     done < <(
+        # 已声明的子模块（相对 $ROOT）：任何子模块初始化前就能读到
         git -C "$ROOT" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
-        git -C "$ROOT" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+        # 已检出的子模块（含嵌套）：必须输出绝对路径 —— 嵌套层的 $sm_path 是相对父模块的
+        # （如 hiddifypanel/user_front），直接拼 $ROOT 会得到不存在的路径。
+        git -C "$ROOT" submodule foreach --recursive --quiet 'pwd -P' 2>/dev/null
     )
     for d in "${dirs[@]}"; do
         add_safe_directory "$d"
     done
+    # 兜底：环境变量方式，即使 $HOME 不可写、无论 root 还是 hiddify-panel 都立即生效。
     local i=${GIT_CONFIG_COUNT:-0}
     for d in "${dirs[@]}"; do
         export "GIT_CONFIG_KEY_$i=safe.directory"
@@ -130,6 +145,32 @@ add_safe_directories() {
         i=$((i + 1))
     done
     [[ $i -gt 0 ]] && export GIT_CONFIG_COUNT=$i
+}
+
+# release 安装的 services/*/src 可能是普通目录，也可能残留一个指向不存在 gitdir 的
+# 半残 .git 指针 —— 此时 submodule update 会报 "could not get a repository handle" /
+# "Unable to find current revision" 并直接失败。把这类"不是合法子模块工作树"的路径
+# 移开，submodule update --init 才能重新克隆。与 utils.sh 第 260-280 行等价。
+is_valid_submodule() {
+    local path="$1" top
+    [ -e "$path/.git" ] || return 1
+    top=$(git -C "$path" rev-parse --show-toplevel 2>/dev/null) || return 1
+    [ "$top" = "$path" ]
+}
+
+fixup_broken_submodules() {
+    local sm path dest
+    while IFS= read -r sm; do
+        [ -n "$sm" ] || continue
+        path="$ROOT/$sm"
+        [ -e "$path" ] || continue
+        is_valid_submodule "$path" && continue
+        warn "移开非子模块路径 $sm"
+        dest="${path}.release-backup"
+        [ -e "$dest" ] && dest="${path}.release-backup.$(date +%s)"
+        mv "$path" "$dest"
+        echo "    一切正常后可删除：rm -rf $dest"
+    done < <(git -C "$ROOT" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //')
 }
 
 is_git_checkout() {
@@ -224,7 +265,14 @@ cmd_version() {
         restore_rendered_files
         log "正在把 $ROOT 的代码切换到 $ARG"
         git -C "$ROOT" checkout -f "$ARG" || die "切换失败"
-        git -C "$ROOT" submodule update --init --recursive --force || die "子模块同步失败"
+        # 与 update.sh 同序：登记全部子模块（含嵌套 user_front）→ 移开半残子模块 →
+        # 同步；失败后补登记再重试一次（刚克隆出来的子模块也是独立仓库，同样要过校验）。
+        add_safe_directories
+        fixup_broken_submodules
+        git -C "$ROOT" submodule update --init --recursive --force || {
+            add_safe_directories
+            git -C "$ROOT" submodule update --init --recursive --force || die "子模块同步失败"
+        }
         # 不带 -x（不删被 ignore 的运行时文件），并显式排除数据与虚拟环境：
         # 裸跑 git clean -fdx 会把 data/ 一起删掉，等于把面板数据清空。
         git -C "$ROOT" clean -fd \

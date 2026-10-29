@@ -63,10 +63,15 @@ function add_safe_directories() {
     dirs+=("$ROOT" "$ROOT/services/panel/src")
     while IFS= read -r d; do
         [ -n "$d" ] || continue
-        dirs+=("$ROOT/$d")
+        # 相对路径（.gitmodules）补 $ROOT；foreach 给的是绝对路径，直接用。
+        case "$d" in
+            /*) dirs+=("$d") ;;
+            *) dirs+=("$ROOT/$d") ;;
+        esac
     done < <(
         git -C "$ROOT" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
-        git -C "$ROOT" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+        # 嵌套层的 $sm_path 是相对父模块的，必须用 pwd -P 输出绝对路径。
+        git -C "$ROOT" submodule foreach --recursive --quiet 'pwd -P' 2>/dev/null
     )
     for d in "${dirs[@]}"; do
         add_safe_directory "$d"

@@ -10,6 +10,8 @@
 #   C  切换后必须真的跑了 install.sh（否则等于只换了代码没生效）
 #   D  普通 untracked 垃圾文件应被清掉（保留的是数据，不是垃圾）
 #   E  不存在的 tag 必须报错退出，不能动工作树
+#   F  嵌套子模块（面板里的 user_front）属主是别的 uid 时，切版本必须自动登记
+#      safe.directory 例外并同步成功——这正是线上 "dubious ownership" 的现场
 #
 # 用法：bash scripts/tests/smoke_version_switch.sh
 set -u
@@ -18,6 +20,7 @@ REPO="$(cd "$(dirname "$0")/../.." && pwd)"
 WORK=/tmp/hvs
 ORIGIN="$WORK/manager.git"
 ROOT="$WORK/root"
+FOREIGN_UID=65534 # 任何非 root：root 读它会触发 git 的 ownership 校验
 
 pass=0
 fail=0
@@ -34,6 +37,31 @@ prepare_env() {
     git config --global user.name smoke
 }
 
+# 面板 + 面板里的嵌套子模块（hiddifypanel/user_front），都放在本地裸仓库里。
+# 线上就是这一层嵌套子模块的属主是 hiddify-panel，而 git 以 root 运行。
+build_nested_submodules() {
+    git init -q --bare "$WORK/userfront.git"
+    local uf="$WORK/userfront"
+    git init -q "$uf"
+    echo "userfront v1" > "$uf/VERSION"
+    git -C "$uf" add -A
+    git -C "$uf" commit -qm "userfront v1"
+    git -C "$uf" push -q "$WORK/userfront.git" HEAD:refs/heads/dev-custom
+    git -C "$WORK/userfront.git" symbolic-ref HEAD refs/heads/dev-custom
+
+    git init -q --bare "$WORK/panel.git"
+    local p="$WORK/panel"
+    git init -q "$p"
+    mkdir -p "$p/hiddifypanel"
+    echo "panel v1" > "$p/VERSION"
+    git -C "$p" add -A
+    git -C "$p" commit -qm "panel v1"
+    git -C "$p" submodule add -q "$WORK/userfront.git" hiddifypanel/user_front
+    git -C "$p" commit -qm "panel: add user_front submodule"
+    git -C "$p" push -q "$WORK/panel.git" HEAD:refs/heads/dev-custom
+    git -C "$WORK/panel.git" symbolic-ref HEAD refs/heads/dev-custom
+}
+
 # 两个 tag 的仓库：v-smoke-1（当前）与 v-smoke-2（目标）。
 # services/warp/wireguard/install.sh 是"被误提交的 .j2 渲染产物"，旁边放着 install.sh.j2。
 build_repo() {
@@ -48,6 +76,9 @@ echo "FAKE INSTALL"
 echo installed > "$(dirname "$0")/../install-was-run"
 EOF
     chmod +x "$work/scripts/install.sh"
+    # 面板子模块（里面还有嵌套的 user_front）：切版本时必须一起同步
+    build_nested_submodules
+    git -C "$work" submodule add -q "$WORK/panel.git" services/panel/src
     # 被误提交的渲染产物 + 它的模板：这就是 v14.2.4 的现场
     echo 'export WGCF_LICENSE_KEY="{{hconfigs[warp_plus_code]}}"' > "$work/services/warp/wireguard/install.sh"
     echo 'export WGCF_LICENSE_KEY="{{hconfigs[warp_plus_code]}}"' > "$work/services/warp/wireguard/install.sh.j2"
@@ -70,6 +101,7 @@ EOF
 clone_server() {
     git clone -q -b dev-custom "$ORIGIN" "$ROOT"
     git -C "$ROOT" checkout -q v-smoke-1
+    git -C "$ROOT" submodule update --init --recursive -q 2>/dev/null
 }
 
 run_version() { bash "$REPO/scripts/onekey.sh" version "$1" --dir "$ROOT" -y 2>&1; }
@@ -112,12 +144,62 @@ scenario_e() {
     fi
 }
 
+scenario_f_nested_foreign_submodule() {
+    log "F: 嵌套子模块属主是其它 uid → 切版本必须自动加例外并同步成功"
+    local sm="$ROOT/services/panel/src/hiddifypanel/user_front"
+
+    # 回到 v-smoke-1 并确保嵌套子模块已检出，再把工作树与 gitdir 都换成别的属主
+    git -C "$ROOT" checkout -q -f v-smoke-1
+    git -C "$ROOT" submodule update --init --recursive -q 2>/dev/null
+    if [ ! -e "$sm/.git" ]; then
+        bad "F 嵌套子模块未初始化，场景无法构造"
+        return
+    fi
+    chown -R "$FOREIGN_UID":"$FOREIGN_UID" "$sm" 2>/dev/null
+    chown -R "$FOREIGN_UID":"$FOREIGN_UID" \
+        "$ROOT/.git/modules/services/panel/src/modules/hiddifypanel/user_front" 2>/dev/null
+
+    # 前面场景可能已经登记过例外（global 与 system 都有）；全部清掉，
+    # 模拟一台"从没信任过这些目录"的服务器，否则场景 F 会假通过。
+    local cfg
+    for cfg in --global --system; do
+        while git config $cfg --get-all safe.directory >/dev/null 2>&1; do
+            git config $cfg --unset-all safe.directory >/dev/null 2>&1 || break
+        done
+    done
+
+    # 现场确认：root 读该仓库此时应被判 dubious ownership，否则说明场景没构造出来
+    if git -C "$sm" rev-parse --show-toplevel >/dev/null 2>&1; then
+        echo "    (info) 未触发 dubious ownership（可能以非 root 运行），仅校验同步结果"
+    else
+        ok "F 已构造出 dubious ownership"
+    fi
+
+    local out
+    out=$(run_version v-smoke-2)
+    echo "$out" | sed 's/^/    | /'
+
+    [ "$(git -C "$ROOT" rev-parse HEAD)" = "$V2" ] &&
+        ok "F 切到 v-smoke-2 成功" || bad "F 切换失败"
+
+    # 期望值：面板仓库里记录的 user_front 子模块指针（不是面板自己的 sha）
+    local want got
+    want=$(git -C "$ROOT/services/panel/src" ls-tree HEAD hiddifypanel/user_front 2>/dev/null | awk '{print $3}')
+    got=$(git -C "$sm" rev-parse HEAD 2>/dev/null)
+    if [ -n "$got" ] && [ "$got" = "$want" ]; then
+        ok "F 嵌套子模块已同步到子模块指针"
+    else
+        bad "F 嵌套子模块未同步（got=${got:-空} want=$want）"
+    fi
+}
+
 # -------------------------------------------------------------------- driver ---
 prepare_env
 build_repo
 clone_server
 scenario_a_b_c_d
 scenario_e
+scenario_f_nested_foreign_submodule
 
 echo
 echo "================ summary ================"

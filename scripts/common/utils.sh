@@ -227,12 +227,17 @@ function add_safe_directories() {
     dirs+=("$HIDDIFY_DIR" "$HIDDIFY_DIR/services/panel/src")
     while IFS= read -r d; do
         [[ -n "$d" ]] || continue
-        dirs+=("$HIDDIFY_DIR/$d")
+        # 相对路径（.gitmodules）补 $HIDDIFY_DIR；foreach 给的是绝对路径，直接用。
+        case "$d" in
+            /*) dirs+=("$d") ;;
+            *) dirs+=("$HIDDIFY_DIR/$d") ;;
+        esac
     done < <(
-        # 已声明的子模块：在任何一个被初始化之前就能读到
+        # 已声明的子模块（相对 $HIDDIFY_DIR）：在任何一个被初始化之前就能读到
         git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //'
-        # 嵌套子模块：父模块检出后才可见
-        git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'echo "$sm_path"' 2>/dev/null
+        # 已检出的子模块（含嵌套）：必须输出绝对路径 —— 嵌套层的 $sm_path 是相对父模块的
+        # （如 hiddifypanel/user_front），直接拼 $HIDDIFY_DIR 会得到不存在的路径。
+        git -C "$HIDDIFY_DIR" submodule foreach --recursive --quiet 'pwd -P' 2>/dev/null
     )
 
     # 尽量写进配置文件（持久、对后续独立进程也有效）。
