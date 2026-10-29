@@ -38,4 +38,11 @@ apply_users() {
 }
 
 # 与 install/update 共用同一把锁：并发执行会同时改写 generated/ 并重启服务。
-with_lock apply-users run_logged apply-users apply_users "$1"
+# flock(1) 只能 exec 一个真正的命令，给它一个 shell 函数会直接失败（exit 69，
+# "failed to execute run_logged"），所以带锁运行时重新进入本脚本，由脚本自己调用
+# run_logged（此时它是本 shell 里的函数）。
+if [ "${APPLY_USERS_LOCKED:-}" = "1" ]; then
+    run_logged apply-users apply_users "$1"
+else
+    APPLY_USERS_LOCKED=1 with_lock apply-users bash "$HIDDIFY_DIR/scripts/apply_users.sh" "$1"
+fi
