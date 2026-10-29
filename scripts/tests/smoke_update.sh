@@ -16,6 +16,12 @@
 # the commit the pointer asks for.
 #
 # Usage: bash scripts/tests/smoke_update.sh [iterations]
+#
+# WARNING: this test *deletes everything* under /opt/hiddify-manager (only data/
+# is stashed and put back). That is fine on a throwaway CI runner, but running it
+# on a live server destroys the installed instance. It therefore refuses to start
+# when that path looks like a real installation; set SMOKE_ALLOW_DESTRUCTIVE=1 to
+# override (only on a machine you are willing to lose).
 set -u
 
 ITERATIONS="${1:-10}"
@@ -38,6 +44,47 @@ failed_iterations=""
 log() { echo -e "\033[1;34m==>\033[0m $*"; }
 ok() { echo -e "    \033[1;32mPASS\033[0m $*"; }
 bad() { echo -e "    \033[1;31mFAIL\033[0m $*"; fail_count=$((fail_count + 1)); }
+
+# ------------------------------------------------------------- safety gate ---
+# update.sh 把 /opt/hiddify-manager 写死成工作目录，所以 $ROOT 不能挪走当夹具用；
+# 于是"能不能跑"只能靠事前判断。$ROOT 一旦是线上实例，prepare_env 的 rm -rf 会
+# 把整套安装删掉（面板 500、用户数据只剩 data/ 的兜底）。
+# 判定顺序：$ROOT 是从我们的夹具克隆来的 -> 安全；从别的 remote 克隆来的，
+# 或者不像 git 仓库但带着服务单元/数据库目录 -> 当成活实例，拒绝执行。
+looks_live() {
+    [ -d "$ROOT" ] || return 1
+    local origin=""
+    origin=$(git -C "$ROOT" config --get remote.origin.url 2>/dev/null || true)
+    if [ -n "$origin" ]; then
+        case "$origin" in
+            "$WORK"*|"$WORK"/*) return 1 ;;   # 我们自己造的夹具
+            *) return 0 ;;                    # 真实 remote（GitHub / release 包）
+        esac
+    fi
+    local p
+    for p in /etc/systemd/system/hiddify-panel.service \
+             /lib/systemd/system/hiddify-panel.service \
+             "$ROOT/VERSION" "$ROOT/data/mysql" "$ROOT/data/db" "$ROOT/data/backup"; do
+        [ -e "$p" ] && return 0
+    done
+    return 1
+}
+
+if looks_live && [ "${SMOKE_ALLOW_DESTRUCTIVE:-0}" != "1" ]; then
+    cat >&2 <<EOF
+smoke_update.sh: refusing to run.
+
+$ROOT looks like a live installation (git remote, service unit or data/ present)
+and this test wipes that directory on every iteration. Running it there would
+delete the installed manager and leave the panel with a 500.
+
+  * on a throwaway container / VM:   SMOKE_ALLOW_DESTRUCTIVE=1 bash scripts/tests/smoke_update.sh
+  * on a machine you care about:     don't. Use scripts/tests/smoke_version_switch.sh,
+                                     which builds its fixtures under /tmp and never
+                                     touches \$ROOT.
+EOF
+    exit 1
+fi
 
 # ---------------------------------------------------------------- fixtures ---
 prepare_env() {
