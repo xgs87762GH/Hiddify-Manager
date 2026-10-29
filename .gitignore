@@ -58,3 +58,10 @@ scripts/common/run.sh
 services/ssfaketls/hiddify-ss-faketls.service
 scripts/common/__pycache__/commander.cpython-313.pyc
 scripts/common/__pycache__/jinja.cpython-313.pyc
+
+# Local IDE / AI agent tooling (do not commit)
+.agents/
+.claude/
+.cursor/
+.vscode/
+.codebuddy/
