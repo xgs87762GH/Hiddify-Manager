@@ -17,11 +17,9 @@ RuntimeDirectoryMode=2755
 UMask=007
 PrivateTmp=yes
 LimitNOFILE=65535
+PrivateDevices=yes
 ProtectHome=yes
-# 不要再加 PrivateDevices=yes：在部分内核/虚拟化环境下它建不出私有 /dev 命名空间，单元会以
-# status=226/NAMESPACE 直接启动失败（redis 完全不需要访问 /dev）。
-# 同理用 ProtectSystem=strict 代替早已废弃的 ReadOnlyDirectories=/：整棵树只读，只放行下面
-# 这份白名单。
+ReadOnlyDirectories=/
 ReadWritePaths=-/var/lib/redis
 ReadWritePaths=-/var/log/redis
 ReadWritePaths=-/var/run/redis
@@ -38,9 +36,11 @@ RestrictRealtime=true
 RestrictNamespaces=true
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
 
-# 集群模式下 redis-server 会改写自己的配置文件，所以放行 /etc/redis。
-ProtectSystem=strict
-ReadWritePaths=-/etc/redis
+# redis-server can write to its own config file when in cluster mode so we
+# permit writing there by default. If you are not using this feature, it is
+# recommended that you replace the following lines with "ProtectSystem=full".
+ProtectSystem=true
+ReadWriteDirectories=-/etc/redis
 
 [Install]
 WantedBy=multi-user.target
