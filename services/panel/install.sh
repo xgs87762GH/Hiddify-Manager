@@ -40,6 +40,13 @@ if [ -n "$HIDDIFY_PANLE_SOURCE_DIR" ]; then
     echo "提示：源码目录 $HIDDIFY_PANLE_SOURCE_DIR"
     build_panel_ui "$HIDDIFY_PANLE_SOURCE_DIR" || exit 1
     uv pip install -e "$HIDDIFY_PANLE_SOURCE_DIR"
+    # editable 安装不会写 site-packages/hiddifypanel；但卸载旧的非 editable 包时可能残留
+    # 未知文件（如 *.bak），使该目录变成一个 namespace 包，在 sys.meta_path 里先于
+    # editable finder 命中，遮蔽源码安装（表现为 create_app_wsgi 等导入失败）。
+    _panel_site_packages="$(python -c 'import site; print(site.getsitepackages()[0])' 2>/dev/null)"
+    if [ -n "$_panel_site_packages" ] && [ -d "$_panel_site_packages/hiddifypanel" ]; then
+        rm -rf "$_panel_site_packages/hiddifypanel"
+    fi
 fi
 
 # 旧版依赖 cron 执行用量统计与自动备份，现已由面板内部调度替代。
