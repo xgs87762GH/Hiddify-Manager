@@ -43,7 +43,7 @@ usage() {
   install          全新安装（目录不存在就 git clone，然后装全部服务）
   update           升级已有安装（备份 → ff-only 快进 → 子模块 → 重建）
   reinstall        按当前代码重装全部服务（不重新拉代码）
-  version <tag>    切换到指定发布版本，如 v14.1.0b3（仅非 git 安装）
+  version <tag>    切换到指定发布版本，如 v14.1.0b3（git 检出：强制换代码留数据；zip 安装：下载该版本覆盖）
   switch           官方安装 → 本 fork 检出（等价于 switch_to_fork.sh）
 
 选项：
@@ -210,11 +210,26 @@ cmd_version() {
         *) die "版本号必须以 v 开头，例如 v14.1.0b3（收到：$ARG）" ;;
     esac
     if is_git_checkout; then
-        die "$ROOT 是 git 检出，不要用 zip 覆盖它。请改用：
-  cd $ROOT && git fetch --tags origin && git checkout $ARG && bash scripts/install.sh --no-gui --no-log
-（这会进入 detached HEAD；回到主线：git checkout $BRANCH）
-若 git 报 \"Your local changes ... would be overwritten\"：那是 .j2 渲染产物被安装改写，
-先执行 bash <(curl -fsSL .../onekey.sh) update 让它自动还原，或手动 git checkout -- 。"
+        # 官方的 update_from_github() 遇到 .git 就直接 return，不给覆盖；这里自己实现
+        # 等价的"换代码留数据"：强制切到该 tag 的代码，data/、generated/、虚拟环境全部留着。
+        warn "$ARG 会在 $ROOT 上整包换掉代码（保留 data/、generated/ 与虚拟环境）"
+        warn "数据库迁移不可逆：降级到比当前更旧的大版本前，先准备好对应版本的数据库备份"
+        confirm "确认切换到 $ARG ？"
+        need_git
+        git -C "$ROOT" fetch -q --tags origin || die "无法获取 tag（git fetch --tags 失败）"
+        git -C "$ROOT" rev-parse -q --verify "refs/tags/$ARG" >/dev/null ||
+            die "找不到 tag $ARG（先在 $ROOT 里 git fetch --tags 看看有哪些版本）"
+        restore_rendered_files
+        log "正在把 $ROOT 的代码切换到 $ARG"
+        git -C "$ROOT" checkout -f "$ARG" || die "切换失败"
+        git -C "$ROOT" submodule update --init --recursive --force || die "子模块同步失败"
+        # 不带 -x（不删被 ignore 的运行时文件），并显式排除数据与虚拟环境：
+        # 裸跑 git clean -fdx 会把 data/ 一起删掉，等于把面板数据清空。
+        git -C "$ROOT" clean -fd \
+            -e data -e generated -e .venv313 -e .venv -e 'services/panel/src/.venv*' 2>/dev/null
+        bash "$ROOT/scripts/install.sh" --no-gui --no-log || die "安装 $ARG 失败"
+        log "已切换到 $ARG（detached HEAD；回到主线：git -C $ROOT checkout $BRANCH）"
+        return 0
     fi
     warn "$ARG 会覆盖 $ROOT 中被跟踪的文件，且不支持从更高版本降级"
     confirm "确认安装 $ARG ？"
