@@ -129,8 +129,11 @@ ln -sf /opt/hiddify-manager/scripts/hiddify /usr/bin/hiddify
 mkdir -p /etc/bash_completion.d /etc/profile.d
 ln -sf /opt/hiddify-manager/scripts/hiddify-completion.bash /etc/bash_completion.d/hiddify
 ln -sf /opt/hiddify-manager/scripts/hiddify-profile.sh /etc/profile.d/hiddify.sh
-if [ -f "$HOME/.bashrc" ] && ! grep -qF 'hiddify-completion.bash' "$HOME/.bashrc"; then
-    echo '[ -f /opt/hiddify-manager/scripts/hiddify-completion.bash ] && . /opt/hiddify-manager/scripts/hiddify-completion.bash' >>"$HOME/.bashrc"
+# 补全已通过 /etc/bash_completion.d/hiddify 全局安装；这里的 .bashrc 写入只是额外便利，
+# 且 HOME 可能未导出或不可写（面板更新 / systemd 场景），任何失败都不应中断安装。
+if [ -n "${HOME:-}" ] && [ -f "$HOME/.bashrc" ] && [ -w "$HOME/.bashrc" ] &&
+    ! grep -qF 'hiddify-completion.bash' "$HOME/.bashrc" 2>/dev/null; then
+    echo '[ -f /opt/hiddify-manager/scripts/hiddify-completion.bash ] && . /opt/hiddify-manager/scripts/hiddify-completion.bash' >>"$HOME/.bashrc" 2>/dev/null || true
 fi
 
 # Ubuntu 24 通常没有 rpcbind：直接 `systemctl disable` 会返回 1，

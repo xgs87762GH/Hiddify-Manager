@@ -29,9 +29,13 @@ install_hiddify_cli() {
         mkdir -p /etc/bash_completion.d /etc/profile.d
         if [ -f "$SCRIPTS/hiddify-completion.bash" ]; then
             ln -sf "$SCRIPTS/hiddify-completion.bash" /etc/bash_completion.d/hiddify
-            # set -u：面板更新/systemd 场景下 HOME 可能未导出，不能直接解引用。
-            if [ -n "${HOME:-}" ] && [ -f "$HOME/.bashrc" ] && ! grep -qF 'hiddify-completion.bash' "$HOME/.bashrc"; then
-                echo '[ -f /opt/hiddify-manager/scripts/hiddify-completion.bash ] && . /opt/hiddify-manager/scripts/hiddify-completion.bash' >>"$HOME/.bashrc"
+            # set -u / set -e：面板更新 / systemd 场景下 HOME 可能未导出，或虽然导出却指向
+            # 不可写路径（如面板以 hiddify-panel 身份运行、却带着 root 的 $HOME）。补全已通过
+            # /etc/bash_completion.d/hiddify 全局安装，这里的 .bashrc 写入只是额外便利，
+            # 任何失败（不可写、不可读）都不应中断迁移。
+            if [ -n "${HOME:-}" ] && [ -f "$HOME/.bashrc" ] && [ -w "$HOME/.bashrc" ] &&
+                ! grep -qF 'hiddify-completion.bash' "$HOME/.bashrc" 2>/dev/null; then
+                echo '[ -f /opt/hiddify-manager/scripts/hiddify-completion.bash ] && . /opt/hiddify-manager/scripts/hiddify-completion.bash' >>"$HOME/.bashrc" 2>/dev/null || true
             fi
         fi
         if [ -f "$SCRIPTS/hiddify-profile.sh" ]; then

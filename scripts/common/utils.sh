@@ -69,7 +69,7 @@ function ensure_service_group() {
 function ensure_generated_permissions() {
     ensure_service_group
     mkdir -p "$HIDDIFY_GENERATED/client" "$HIDDIFY_GENERATED/include"
-    chown -R $USER:hiddify-common "$HIDDIFY_GENERATED"
+    chown -R "${USER:-}":hiddify-common "$HIDDIFY_GENERATED"
     find "$HIDDIFY_GENERATED" -type d -exec chmod 2770 {} \;
     find "$HIDDIFY_GENERATED" -type f -exec chmod 660 {} \;
 }
