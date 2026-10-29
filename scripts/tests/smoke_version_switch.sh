@@ -193,6 +193,31 @@ scenario_f_nested_foreign_submodule() {
     fi
 }
 
+scenario_g_broken_nested_submodule() {
+    log "G: 嵌套子模块 .git 指向不存在的 gitdir → 切版本必须挪开并重克隆"
+    local sm="$ROOT/services/panel/src/hiddifypanel/user_front" bak out
+    git -C "$ROOT" checkout -q -f v-smoke-1
+    git -C "$ROOT" submodule update --init --recursive -q 2>/dev/null
+    # 场景 F 把工作树改成了别的属主，这里恢复回来，只保留"半残指针"这一个变量
+    chown -R 0:0 "$sm" 2>/dev/null
+    chown -R 0:0 "$ROOT/.git/modules" 2>/dev/null
+    printf 'gitdir: %s\n' "$WORK/nonexistent/user_front" >"$sm/.git"
+
+    out=$(run_version v-smoke-2)
+    echo "$out" | sed 's/^/    | /'
+
+    [ "$(git -C "$ROOT" rev-parse HEAD)" = "$V2" ] &&
+        ok "G 切到 v-smoke-2 成功" || bad "G 切换失败"
+    # 重克隆后 .git 可能是相对路径的 gitdir 指针，用 rev-parse 判定它重新成为独立仓库
+    if [ -e "$sm/.git" ] && [ "$(git -C "$sm" rev-parse --show-toplevel 2>/dev/null)" = "$sm" ]; then
+        ok "G 嵌套子模块已重克隆"
+    else
+        bad "G 嵌套子模块未重克隆"
+    fi
+    bak=$(ls -d "$sm".release-backup* 2>/dev/null | head -n 1)
+    [ -n "$bak" ] && ok "G 半残目录已备份为 $(basename "$bak")" || bad "G 未生成 .release-backup"
+}
+
 # -------------------------------------------------------------------- driver ---
 prepare_env
 build_repo
@@ -200,6 +225,7 @@ clone_server
 scenario_a_b_c_d
 scenario_e
 scenario_f_nested_foreign_submodule
+scenario_g_broken_nested_submodule
 
 echo
 echo "================ summary ================"

@@ -85,9 +85,11 @@ function add_safe_directories() {
     [[ $i -gt 0 ]] && export GIT_CONFIG_COUNT=$i
 }
 
-# release 安装的 services/*/src 可能是普通目录，或残留一个指向不存在 gitdir 的
-# 半残 .git 指针（git submodule update 会报 "could not get a repository handle"）。
-# 把这类"不是合法子模块工作树"的路径移开，让 update --init 重新克隆。
+# release 安装留下的子模块可能是"半残"的：.git 指针指向的 gitdir 已经不存在，
+# 此时 submodule update 会报 "could not get a repository handle" /
+# "Unable to find current revision"。这类目录必须移开，--init 才能重克隆。
+# 嵌套子模块（面板里的 hiddifypanel/user_front）同样会半残，所以按 .gitmodules
+# 递归收集；判定只看指针指向的 gitdir 是否存在，避免把属主不同的好仓库误判。
 is_valid_submodule() {
     local path="$1" top
     [ -e "$path/.git" ] || return 1
@@ -95,19 +97,42 @@ is_valid_submodule() {
     [ "$top" = "$path" ]
 }
 
+collect_submodule_paths() {
+    local base="$1" p
+    [ -f "$base/.gitmodules" ] || return 0
+    while IFS= read -r p; do
+        [ -n "$p" ] || continue
+        echo "${base%/}/$p"
+        collect_submodule_paths "${base%/}/$p"
+    done < <(git config --file "$base/.gitmodules" --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //')
+}
+
+# 半残判定：.git 是指针文件，且它指向的 gitdir 不存在
+is_broken_submodule() {
+    local path="$1" gd
+    [ -f "$path/.git" ] || return 1
+    gd=$(sed -n 's/^gitdir:[[:space:]]*//p' "$path/.git" 2>/dev/null | head -n 1)
+    [ -n "$gd" ] || return 1
+    case "$gd" in
+        /*) ;;
+        *) gd="$path/$gd" ;;
+    esac
+    [ -e "$gd" ] && return 1
+    return 0
+}
+
 fixup_broken_submodules() {
-    local sm path dest
-    while IFS= read -r sm; do
-        [ -n "$sm" ] || continue
-        path="$ROOT/$sm"
-        [ -e "$path" ] || continue
-        is_valid_submodule "$path" && continue
-        warn "移开非子模块路径 $sm"
+    local path dest
+    while IFS= read -r path; do
+        [ -n "$path" ] || continue
+        [ -d "$path" ] || continue
+        is_broken_submodule "$path" || continue
+        warn "移开半残子模块 ${path#"$ROOT"/}"
         dest="${path}.release-backup"
-        [ -e "$dest" ] && dest="${path}.release-backup.$(date +%s)"
+        [ -e "$dest" ] && dest="${dest}.$(date +%s)"
         mv "$path" "$dest"
         echo "    一切正常后可删除：rm -rf $dest"
-    done < <(git -C "$ROOT" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //')
+    done < <(collect_submodule_paths "$ROOT")
 }
 
 # --- 已经是 git 检出：直接从 git 更新 -------------------------------------------
