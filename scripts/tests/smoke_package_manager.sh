@@ -57,8 +57,8 @@ DEV="$WORK/develop-tree"
 mkdir -p "$DEV/scripts/common" "$DEV/data"
 cp "$WORK/scripts/common/"* "$DEV/scripts/common/"
 cp "$WORK/data/packages.db" "$DEV/data/packages.db" 2>/dev/null || : > "$DEV/data/packages.db"
-# 本环境的 GNU wget 编译时未启用 file:// 协议（add_package 只用 wget，download_package 用 curl）。
-# 放一个 stub 到 PATH 最前面，把 file:// 当本地复制；其它 URL 仍交给真实 wget。
+# Git Bash / 部分环境的 wget、curl 都不支持 file://（add_package 用 wget，download_package 用 curl）。
+# 放 stub 到 PATH 最前面，把 file:// 当本地复制；其它 URL 仍交给真实工具。
 cat > "$WORK/bin/wget" <<'WGET_STUB'
 #!/bin/bash
 out=""
@@ -75,7 +75,31 @@ case "$url" in
     *) exec /usr/bin/wget -q "$url" -O "$out" ;;
 esac
 WGET_STUB
-chmod +x "$WORK/bin/wget"
+cat > "$WORK/bin/curl" <<'CURL_STUB'
+#!/bin/bash
+out=""
+url=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o|--output) out="$2"; shift 2 ;;
+        -s|--silent|-L|--location|-f|--fail|-S|--show-error) shift ;;
+        -*) shift ;;
+        *) url="$1"; shift ;;
+    esac
+done
+case "$url" in
+    file://*) cp "${url#file://}" "$out" ;;
+    *)
+      real=
+      for c in /usr/bin/curl /mingw64/bin/curl.exe; do
+        [ -x "$c" ] && real=$c && break
+      done
+      [ -n "$real" ] || { echo "curl stub: no real curl" >&2; exit 127; }
+      exec "$real" -sL -o "$out" "$url"
+      ;;
+esac
+CURL_STUB
+chmod +x "$WORK/bin/wget" "$WORK/bin/curl"
 export PATH="$WORK/bin:$PATH"
 
 export HIDDIFY_DIR="$DEV"
@@ -175,7 +199,8 @@ if [[ $rc -eq 1 ]]; then ok "two-arg under set -u skips intact"; else bad "two-a
 echo "== marker (\$5): archive gone, binary still there =="
 ARCH="$DEV/demo.tgz"
 BIN="$DEV/demo.extracted"
-cp "$OUT" "$BIN"
+# Git Bash/NTFS：纯数据文件即使用 chmod +x，[[ -x ]] 仍可能为假；写成带 shebang 的脚本更稳。
+printf '#!/bin/sh\nexit 0\n' > "$BIN"
 chmod +x "$BIN"
 rm -f "$ARCH"
 # pretend packages.db says 1.0.1 installed; marker is extracted binary
