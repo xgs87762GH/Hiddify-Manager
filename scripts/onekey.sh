@@ -165,10 +165,29 @@ cmd_install() {
     log "安装完成"
 }
 
+# v14.2.4 及更早版本把 .j2 的渲染产物（如 services/warp/wireguard/install.sh）也提交了进来，
+# 装完/跑完它们必然被改脏；此后 ff-only 更新和 `git checkout <新 tag>` 都会被 git 直接拒绝
+# （"Your local changes ... would be overwritten"），升级就卡死了。
+# 服务器检出里被改动的跟踪文件只可能是这类生成物，所以更新/切版本前先把它们还原。
+# 只还原"旁边存在同名 .j2 模板"的文件，避免误伤人为改动。
+restore_rendered_files() {
+    is_git_checkout || return 0
+    local f n=0
+    while IFS= read -r f; do
+        [ -n "$f" ] || continue
+        if [ -f "$ROOT/${f}.j2" ] || [ -f "$ROOT/${f%.j2}.j2" ]; then
+            git -C "$ROOT" checkout -- "$f" 2>/dev/null && n=$((n + 1))
+        fi
+    done < <(git -C "$ROOT" diff --name-only 2>/dev/null)
+    [ "$n" -gt 0 ] && log "已还原 $n 个被渲染改写的跟踪文件（.j2 产物）"
+    return 0
+}
+
 cmd_update() {
     need_root
     [ -f "$ROOT/scripts/update.sh" ] ||
         die "未找到 $ROOT/scripts/update.sh；全新机器请先用 install"
+    restore_rendered_files
     log "正在更新 ${ROOT}"
     bash "$ROOT/scripts/update.sh" --no-gui --no-log || die "更新失败"
     log "更新完成"
@@ -193,7 +212,9 @@ cmd_version() {
     if is_git_checkout; then
         die "$ROOT 是 git 检出，不要用 zip 覆盖它。请改用：
   cd $ROOT && git fetch --tags origin && git checkout $ARG && bash scripts/install.sh --no-gui --no-log
-（这会进入 detached HEAD；回到主线：git checkout $BRANCH）"
+（这会进入 detached HEAD；回到主线：git checkout $BRANCH）
+若 git 报 \"Your local changes ... would be overwritten\"：那是 .j2 渲染产物被安装改写，
+先执行 bash <(curl -fsSL .../onekey.sh) update 让它自动还原，或手动 git checkout -- 。"
     fi
     warn "$ARG 会覆盖 $ROOT 中被跟踪的文件，且不支持从更高版本降级"
     confirm "确认安装 $ARG ？"
