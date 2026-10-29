@@ -53,10 +53,12 @@ usage() {
   -y, --yes        不再询问确认
   -h, --help       显示本帮助
 
-例子：
-  bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh) install
-  bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh) update
-  bash <(curl -fsSL https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh) version v14.1.0b3
+例子（把 URL 存成变量更短：OK=https://raw.githubusercontent.com/xgs87762GH/Hiddify-Manager/dev-custom/scripts/onekey.sh）：
+  bash <(curl -fsSL "$OK") install             # 全新安装
+  bash <(curl -fsSL "$OK") update              # 升级（会先备份）
+  bash <(curl -fsSL "$OK") reinstall           # 按当前代码重装服务
+  bash <(curl -fsSL "$OK") version v14.2.4 -y  # 切到指定版本（git 检出也能用：强制换代码留数据）
+  bash <(curl -fsSL "$OK") switch              # 官方安装 → 本 fork 检出
 USAGE
 }
 
