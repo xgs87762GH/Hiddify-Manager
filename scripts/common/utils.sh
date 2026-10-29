@@ -251,6 +251,34 @@ function add_safe_directories() {
     [[ $i -gt 0 ]] && export GIT_CONFIG_COUNT=$i
 }
 
+# release 安装的 services/*/src 可能是普通目录，也可能残留一个指向不存在 gitdir 的
+# 半残 .git 指针 —— 此时 git submodule update 会报 "could not get a repository
+# handle" / "Unable to find current revision" 并直接失败。把这类"不是合法子模块
+# 工作树"的路径移开，submodule update --init 才能重新克隆。
+# switch_to_fork.sh 自带一份同名实现（它要能单独 curl 执行、不 source 本文件），
+# 改动时请两处保持同步。
+is_valid_submodule() {
+    local path="$1" top
+    [ -e "$path/.git" ] || return 1
+    top=$(git -C "$path" rev-parse --show-toplevel 2>/dev/null) || return 1
+    [ "$top" = "$path" ]
+}
+
+fixup_broken_submodules() {
+    local sm path dest
+    while IFS= read -r sm; do
+        [ -n "$sm" ] || continue
+        path="$HIDDIFY_DIR/$sm"
+        [ -e "$path" ] || continue
+        is_valid_submodule "$path" && continue
+        warning "移开非子模块路径 $sm"
+        dest="${path}.release-backup"
+        [ -e "$dest" ] && dest="${path}.release-backup.$(date +%s)"
+        mv "$path" "$dest"
+        echo "    一切正常后可删除：rm -rf $dest"
+    done < <(git -C "$HIDDIFY_DIR" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //')
+}
+
 # 把调用方使用的旧上游仓库名（hiddify-panel、Hiddify-Panel、hiddify-manager……）
 # 映射到你 fork 的仓库，确保每次版本检查和下载都由 fork 提供，而不是 hiddify/*。
 function fork_repo() {

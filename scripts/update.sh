@@ -130,6 +130,9 @@ function update_from_git() {
     # 保留英文关键词：scripts/tests/smoke_update.sh 依赖它确认同步确实执行过。
     update_progress "Hiddify 更新器" "同步子模块（Syncing submodules）" 45
     add_safe_directories
+    # release 安装可能留下半残子模块（指向不存在 gitdir 的 .git 指针），
+    # 不先移开的话下面的 submodule update 会以 "Unable to find current revision" 直接失败。
+    fixup_broken_submodules
     git submodule update --init --recursive || {
         # 这次调用新克隆出来的子模块是一个独立仓库，同样要过所有权检查：
         # 补加例外后再试一次。
