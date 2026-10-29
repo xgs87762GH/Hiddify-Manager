@@ -94,6 +94,10 @@ jobs:
         uses: softprops/action-gh-release@v1
         with:
           files: "*.zip"
+          # Keep the Releases title identical to the tag so the page TOC does
+          # not grow a second "Hiddify …" / body-H1 entry for the same version.
+          name: ${{ github.ref_name }}
           prerelease: ${{ contains(github.ref_name,'b') }}
           body_path: release_message.md
+
     
