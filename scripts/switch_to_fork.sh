@@ -7,7 +7,7 @@
 # 选项（同时也都可以用环境变量指定）：
 #   --branch <name>      跟踪的分支             （默认 dev-custom，$HIDDIFY_FORK_BRANCH）
 #   --fork <url>         你的 Hiddify-Manager fork（默认 $HIDDIFY_FORK_URL）
-#   --panel-repo <o/r>   同时跟踪你的面板 fork   （默认保留官方，$HIDDIFY_PANEL_REPO）
+#   --panel-repo <o/r>   覆盖面板子模块 URL（默认用 fork .gitmodules，已是本 fork 面板）
 #   --base <branch>      对比用的上游分支        （默认 main）
 #   --no-backup          跳过备份步骤（不推荐）
 #   -y, --yes            不再询问确认
@@ -120,7 +120,12 @@ update_from_git() {
         git submodule update --init --recursive || warn "子模块更新失败"
     }
     log "正在应用"
-    make build
+    export HIDDIFY_NO_HTTP_API=true
+    if command -v make >/dev/null 2>&1; then
+        make build
+    else
+        bash scripts/install.sh --no-gui --no-log
+    fi
     return $?
 }
 
@@ -172,12 +177,11 @@ switch_to_fork() {
     # release 安装里的子模块路径可能是普通目录，或残留一个指向不存在 gitdir 的
     # 半残 .git 指针；git submodule update 会因此失败，先把它们移开。
     fixup_broken_submodules
-    git branch -m "$BRANCH" >/dev/null 2>&1 || true
-    git branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
 
     if [ -n "$PANEL_REPO" ]; then
         log "把面板子模块指向 ${PANEL_REPO}"
-        sed -i "s#https://github.com/hiddify/Hiddify-Panel.git#https://github.com/${PANEL_REPO}.git#" .gitmodules
+        # 兼容官方旧名 Hiddify-Panel、现行 hiddifypanel，以及本 fork 已写好的 URL。
+        sed -i -E "s#url = https://github.com/[^/]+/(Hiddify-Panel|hiddifypanel)(\.git)?#url = https://github.com/${PANEL_REPO}.git#" .gitmodules
         git submodule sync --recursive
     fi
 
