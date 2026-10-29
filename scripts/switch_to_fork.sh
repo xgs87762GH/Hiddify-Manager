@@ -80,6 +80,31 @@ function add_safe_directories() {
     [[ $i -gt 0 ]] && export GIT_CONFIG_COUNT=$i
 }
 
+# release 安装的 services/*/src 可能是普通目录，或残留一个指向不存在 gitdir 的
+# 半残 .git 指针（git submodule update 会报 "could not get a repository handle"）。
+# 把这类"不是合法子模块工作树"的路径移开，让 update --init 重新克隆。
+is_valid_submodule() {
+    local path="$1" top
+    [ -e "$path/.git" ] || return 1
+    top=$(git -C "$path" rev-parse --show-toplevel 2>/dev/null) || return 1
+    [ "$top" = "$path" ]
+}
+
+fixup_broken_submodules() {
+    local sm path dest
+    while IFS= read -r sm; do
+        [ -n "$sm" ] || continue
+        path="$ROOT/$sm"
+        [ -e "$path" ] || continue
+        is_valid_submodule "$path" && continue
+        warn "移开非子模块路径 $sm"
+        dest="${path}.release-backup"
+        [ -e "$dest" ] && dest="${path}.release-backup.$(date +%s)"
+        mv "$path" "$dest"
+        echo "    一切正常后可删除：rm -rf $dest"
+    done < <(git -C "$ROOT" config --file .gitmodules --get-regexp '\.path$' 2>/dev/null | sed 's/^[^ ]* //')
+}
+
 # --- 已经是 git 检出：直接从 git 更新 -------------------------------------------
 update_from_git() {
     cd "$ROOT" || die "无法进入 $ROOT"
@@ -88,6 +113,7 @@ update_from_git() {
     git fetch --no-recurse-submodules --prune origin "$BRANCH" || die "git fetch 失败"
     git merge --ff-only "origin/$BRANCH" || die "无法快进合并，请手动处理：cd $ROOT && git status"
     add_safe_directories
+    fixup_broken_submodules
     git submodule update --init --recursive || {
         # 上面克隆的子模块本身就是一个独立仓库：补加例外后重试
         add_safe_directories
@@ -143,12 +169,9 @@ switch_to_fork() {
     git branch -m "$BRANCH" >/dev/null 2>&1 || true
     git branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
 
-    # release 安装里的 services/panel/src 是普通目录，git 需要它是子模块
-    if [ -d services/panel/src ] && [ ! -e services/panel/src/.git ]; then
-        warn "正在把 release 版本的 services/panel/src 移开"
-        mv services/panel/src services/panel/src.release-backup
-        echo "    一切正常后可删除：rm -rf services/panel/src.release-backup"
-    fi
+    # release 安装里的子模块路径可能是普通目录，或残留一个指向不存在 gitdir 的
+    # 半残 .git 指针；git submodule update 会因此失败，先把它们移开。
+    fixup_broken_submodules
     git branch -m "$BRANCH" >/dev/null 2>&1 || true
     git branch --set-upstream-to="origin/$BRANCH" "$BRANCH" >/dev/null 2>&1 || true
 
