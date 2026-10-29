@@ -185,6 +185,6 @@ asyncio.run(main())
 
 ## 7. 和本仓库其它文档
 
-- 服务器升代码：[server-update.md](server-update.md)  
-- 部署：[deployment.md](deployment.md)  
+- 服务器升代码：[server-update.md](./server-update.md)  
+- 部署：[部署](../deploy/README.md)  
 - 面板里开 Snell 但 core 报 `unknown inbound type: snell`：当前正式 hiddify-core 内嵌 sing-box 1.13，无 Snell inbound；与「能否 SSH」无关，排查时别和跳板问题混在一起。

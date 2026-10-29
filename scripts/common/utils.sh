@@ -24,7 +24,7 @@ export venv_path="/opt/hiddify-manager/.venv313"
 # even when the env vars are no longer set. Marker names must not start with
 # "SQLALCHEMY_DATABASE_URI" / "REDIS_URI": run.sh deletes the config lines by
 # those prefixes when it rewrites its config.
-# See docs/EXTERNAL_DATABASE.md.
+# See docs/ops/external-database.md.
 # ---------------------------------------------------------------------------------
 
 # True when the panel is configured to use an external MySQL/MariaDB server

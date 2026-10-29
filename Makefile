@@ -51,9 +51,9 @@ latest-tags:
 
 dev:
 	@echo "dev" > VERSION
-	@gitchangelog > HISTORY.md || { echo "Please run pip install gitchangelog pystache mustache markdown"; exit 2; } 
+	@gitchangelog > docs/release/HISTORY.md || { echo "Please run pip install gitchangelog pystache mustache markdown"; exit 2; } 
 	@make -C ./services/panel/src dev
-	@git add VERSION HISTORY.md services/panel/src
+	@git add VERSION docs/release/HISTORY.md services/panel/src
 	@git commit -m "release: switch to develop"
 
 .PHONY: release
@@ -71,9 +71,9 @@ endif
 	@echo "$${TAG}" > VERSION 
 	@make -C ./services/panel/src release TAG=$${TAG}
 	@git tag $${TAG} > /dev/null
-	@gitchangelog > docs/HISTORY.md || { git tag -d $${TAG}; echo "Please run pip install gitchangelog pystache mustache markdown"; exit 2; } 
+	@gitchangelog > docs/release/HISTORY.md || { git tag -d $${TAG}; echo "Please run pip install gitchangelog pystache mustache markdown"; exit 2; } 
 	@git tag -d $${TAG} > /dev/null
-	@git add VERSION docs/HISTORY.md services/panel/src
+	@git add VERSION docs/release/HISTORY.md services/panel/src
 	@git commit -m "release: version $${TAG} 🚀" 
 	@echo "creating git tag : v$${TAG}" 
 	@git tag v$${TAG} 

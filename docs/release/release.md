@@ -1,7 +1,7 @@
 # 打包与发布
 
 > 讲怎么把当前代码打成**一个可被服务器识别和升级的版本**：改版本号 → 打 tag → GitHub 自动出包 → 服务器升级。
-> 服务器侧怎么升级看 [升级](server-update.md)，依赖哪些外部资源看 [构建与安装依赖](build-requirements.md)。
+> 服务器侧怎么升级看 [升级](../ops/server-update.md)，依赖哪些外部资源看 [构建与安装依赖](../dev/build-requirements.md)。
 
 ---
 
@@ -44,7 +44,7 @@ make ui
 - [ ] `dev-custom` 上无未提交改动，子模块指针已推送
 - [ ] `VERSION` 与面板 `VERSION.py` 一致
 - [ ] `bash -n` 通过、`make ui` 通过
-- [ ] 更新相关脚本仍只指向本 fork（见 [构建与安装依赖 §3](build-requirements.md)）
+- [ ] 更新相关脚本仍只指向本 fork（见 [构建与安装依赖 §3](../dev/build-requirements.md)）
 - [ ] 文档已同步（行为改了就要改文档）
 
 ---
@@ -127,7 +127,7 @@ unzip -l /tmp/hm.zip | grep services/panel/src/hiddifypanel/VERSION.py   # 应�
 | 非 git（官方 zip 安装） | 面板点"更新" → 按 `package_mode` 查 fork 的 release → 下载本 fork 的 `hiddify-manager.zip` 覆盖，面板源码再从 fork 克隆 |
 | 指定版本安装 | `bash <(curl -fsSL $OK) version v14.1.0b3 -y`（tag 必须存在于本 fork） |
 
-非 git 安装想长期稳，建议一次性转成 checkout：见 [升级 §4](server-update.md)。
+非 git 安装想长期稳，建议一次性转成 checkout：见 [升级 §4](../ops/server-update.md)。
 
 ---
 

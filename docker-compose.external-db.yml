@@ -1,6 +1,6 @@
 # Use external (remote) MySQL/MariaDB and Redis servers instead of the built-in
 # containers. Set the connection URIs in docker.env
-# (SQLALCHEMY_DATABASE_URI / REDIS_URI_MAIN — see docs/EXTERNAL_DATABASE.md), then:
+# (SQLALCHEMY_DATABASE_URI / REDIS_URI_MAIN — see docs/ops/external-database.md), then:
 #
 #   docker compose -f docker-compose.yml -f docker-compose.external-db.yml up -d
 #

@@ -2,7 +2,7 @@
 
 > fork 维护文档，讲怎么把服务器 `/opt/hiddify-manager` 升到 `dev-custom` 最新代码。
 > 官方 release 安装的常规升级不适用（那种直接在面板里点"更新"即可）。
-> 首次部署看 [部署](deployment.md)，验证方法看 [测试与验证](testing.md)。
+> 首次部署看 [部署](../deploy/README.md)，验证方法看 [测试与验证](../dev/testing.md)。
 
 ---
 
@@ -174,7 +174,7 @@ bash <(curl -fsSL $OK) update
 ## 5. 构建要求（失败多半出在这）
 
 完整的外部依赖清单（GitHub 构建物、Node 镜像、可覆盖变量、限流说明）见
-[构建与安装依赖](build-requirements.md)；发新版本见 [打包发布](release.md)。
+[构建与安装依赖](../dev/build-requirements.md)；发新版本见 [打包发布](../release/release.md)。
 
 管理端 UI 产物不在 git 里（`.gitignore` 忽略 `hiddifypanel/static/admin-v2/`），**必须在服务器上构建**：
 

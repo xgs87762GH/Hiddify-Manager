@@ -91,7 +91,7 @@ Database tests use their own Redis database (15), never the live one. The admin 
 
 For the full picture — how to run each layer, how to reproduce an end-to-end smoke test (start the panel, run the
 migrations, open the admin UI in a real browser), and the traps that make it look broken when it is not — see
-**[docs/testing.md](docs/testing.md)**.
+**[docs/dev/testing.md](docs/dev/testing.md)**.
 
 ## Committing
 

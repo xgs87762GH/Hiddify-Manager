@@ -1,7 +1,7 @@
 # 构建与安装依赖
 
 > 讲清楚**安装 / 升级 / 打包时脚本会从外面下载什么**。这些外部资源取不到，安装就会失败。
-> 部署流程看 [部署](deployment.md)，升级看 [升级](server-update.md)，打版本看 [打包发布](release.md)。
+> 部署流程看 [部署](../deploy/README.md)，升级看 [升级](../ops/server-update.md)，打版本看 [打包发布](../release/release.md)。
 
 脚本本身不含任何二进制和前端产物，全部运行时下载，**以 GitHub 构建物为主**。
 
@@ -116,7 +116,7 @@
 | `Could not download the panel source` | 面板 fork 不可达 / 分支不存在 | 确认 `HIDDIFY_PANEL_REPO` 与网络 |
 | `Failed to fetch` / `not our ref`（子模块） | 子模块指针指向未推送的 commit | 先推面板 fork，再在外层记指针 |
 | 版本查询结果为空 | GitHub API 限流或不通 | 等一小时，或直接用 `update.sh` 强制更新 |
-| `releases/latest` 404 | fork 还没有任何 release | 按 [打包发布](release.md) 打第一个 tag |
+| `releases/latest` 404 | fork 还没有任何 release | 按 [打包发布](../release/release.md) 打第一个 tag |
 
 ---
 

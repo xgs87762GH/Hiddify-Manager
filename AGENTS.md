@@ -79,16 +79,18 @@ cd ../.. && git add services/panel/src && git commit   # 后记指针
 
 | 文档 | 内容 |
 | --- | --- |
-| [README.md](README.md) | 中文主入口：fork 说明、文档索引、快速开始、常用命令 |
-| [docs/deployment.md](docs/deployment.md) | 首次部署：一键/手动/转 fork/Docker、系统要求、端口、装完怎么验证、备份恢复、故障排查 |
-| [docs/server-update.md](docs/server-update.md) | 服务器升级：日常升级、首次转换、构建要求、回滚 |
-| [docs/build-requirements.md](docs/build-requirements.md) | 构建与安装依赖：GitHub 构建物清单、非 GitHub 源、可覆盖变量、限流与排查 |
-| [docs/release.md](docs/release.md) | 打包发布：版本号规则、发布前检查、打 tag、Actions 产物、校验、回滚 |
-| [docs/release-notes/v14.1.0b3.md](docs/release-notes/v14.1.0b3.md) | 本版本发布说明：三端改了什么、与官方逐项对比、已知限制 |
-| [docs/testing.md](docs/testing.md) | 测试与验证：五层测试怎么跑、端到端冒烟怎么复现、踩过的坑 |
+中文为主语言。总入口是 [README.md](README.md)，文档目录是 [docs/README.md](docs/README.md)（按角色分组）。
 
-这些文档互相引用。改部署 / 升级 / 依赖 / 发布 / 测试相关的行为时，同步更新对应文档。
-官方英文 README 归档在 [docs/README_upstream_en.md](docs/README_upstream_en.md)，不再作为入口。
+| 目录 | 内容 |
+| --- | --- |
+| [docs/deploy/](docs/deploy/README.md) | 部署：一键部署、git 拉取开发、Docker、服务器手动部署 |
+| [docs/dev/](docs/dev/README.md) | 开发：构建与安装依赖、测试与验证 |
+| [docs/ops/](docs/ops/README.md) | 运维：升级与切版本、域名、外部数据库、自定义代理、面板 Session 跳板 |
+| [docs/release/](docs/release/README.md) | 发版：版本号规则、发布前检查、打 tag、Actions 产物、校验、回滚 |
+| [docs/i18n/](docs/i18n/README.md) | 其它语言（en / fa / ru），内容保持原语言 |
+
+这些文档互相引用。改部署 / 开发 / 运维 / 发版相关的行为时，同步更新对应文档。
+上游英文 README 归档在 [docs/i18n/en/README_upstream.md](docs/i18n/en/README_upstream.md)，不再作为入口。
 
 ### 其它
 

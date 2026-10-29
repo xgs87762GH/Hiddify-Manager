@@ -126,7 +126,7 @@ error during build:
 复现：往任一 `translations.i18n/*.json` 里加个多余逗号，跑 `npm run build`。
 
 > 因为升级是**先 merge 再 build**，构建失败会造成"代码新、面板旧"的半升级状态，
-> 详见 [升级](server-update.md)。
+> 详见 [升级](../ops/server-update.md)。
 
 ---
 
