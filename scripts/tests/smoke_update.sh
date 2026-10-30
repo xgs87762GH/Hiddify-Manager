@@ -11,6 +11,8 @@
 #   C  a panel-only bump (outer commit moving just the submodule pointer)
 #   D  the server still has an older update.sh -> it must hand over and work
 #   E  a local commit diverged from the remote -> ff-only must refuse, work kept
+#   F  detached HEAD (onekey version tag checkout) -> falls back to the remote
+#      default branch instead of the stale origin/HEAD symref
 #
 # Every scenario must leave HEAD on origin/dev-custom and the panel checkout on
 # the commit the pointer asks for.
@@ -332,6 +334,22 @@ scenario_d() {
     assert_submodule_synced
 }
 
+scenario_f() {
+    log "F: detached HEAD (tag checkout) -> falls back to the remote default branch"
+    # 回到干净的 dev-custom tip，再检出历史 commit 形成 detached HEAD（模拟 onekey version 切 tag）
+    git -C "$ROOT" checkout -q dev-custom
+    git -C "$ROOT" reset -q --hard origin/dev-custom
+    git -C "$ROOT" submodule update --init --recursive -q
+    local detach out
+    detach=$(git -C "$ROOT" rev-parse HEAD~1)
+    git -C "$ROOT" checkout -q --detach "$detach"
+    out=$(run_update)
+    echo "$out" | sed 's/^/    | /'
+    echo "$out" | grep -q "detached HEAD" || bad "no detached-HEAD fallback log"
+    assert_head_is_remote
+    assert_submodule_synced
+}
+
 # ------------------------------------------------------------------- driver ---
 run_once() {
     local i="$1"
@@ -352,6 +370,7 @@ run_once() {
     scenario_c
     scenario_e
     scenario_d
+    scenario_f
     if [ "$fail_count" = "$before" ]; then
         pass_count=$((pass_count + 1))
     else

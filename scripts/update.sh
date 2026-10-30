@@ -89,7 +89,30 @@ function hand_over_to_new_script() {
 # 可用 HIDDIFY_GIT_REMOTE / HIDDIFY_GIT_BRANCH 覆盖（默认：origin / 当前分支）。
 function update_from_git() {
     local remote="${HIDDIFY_GIT_REMOTE:-origin}"
-    local branch="${HIDDIFY_GIT_BRANCH:-$(git -C "$HIDDIFY_DIR" rev-parse --abbrev-ref HEAD)}"
+    local branch="${HIDDIFY_GIT_BRANCH:-}"
+    if [[ -z "$branch" ]]; then
+        branch="$(git -C "$HIDDIFY_DIR" symbolic-ref --short -q HEAD 2>/dev/null)" || true
+    fi
+
+    if [[ -z "$branch" ]]; then
+        # detached HEAD（例如 onekey version 切到 tag 后）：rev-parse --abbrev-ref HEAD
+        # 只会返回字面 "HEAD"，而 refs/remotes/origin/HEAD 这个符号引用可能陈旧
+        # （指向历史默认分支），直接 merge origin/HEAD 会分叉失败。这里回退到远程默认分支。
+        warning "检测到 detached HEAD（通常由 onekey version 切到 tag 导致），正在探测 $remote 的默认分支……"
+        branch="$(git -C "$HIDDIFY_DIR" ls-remote --symref "$remote" HEAD 2>/dev/null | \
+            awk 'NR==1 && /^ref:/{sub(/^ref: refs\/heads\//, ""); sub(/[[:space:]].*$/, ""); print; exit}')"
+        if [[ -z "$branch" ]]; then
+            # 离线兜底：读本地缓存的默认分支符号引用（可能陈旧，聊胜于无）
+            branch="$(git -C "$HIDDIFY_DIR" symbolic-ref --short -q "refs/remotes/$remote/HEAD" 2>/dev/null | \
+                sed "s#^$remote/##")"
+        fi
+        if [[ -z "$branch" ]]; then
+            error "当前是 detached HEAD，且无法确定 $remote 的默认分支。"
+            error "请先切回分支（git -C $HIDDIFY_DIR checkout <分支>）或设置 HIDDIFY_GIT_BRANCH。"
+            return 1
+        fi
+        echo "已确定更新目标：$remote/$branch（远程默认分支）"
+    fi
 
     echo "正在从 $remote/$branch 更新 $HIDDIFY_DIR ……"
     add_safe_directories
