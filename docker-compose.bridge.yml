@@ -1,0 +1,31 @@
+# Bridge profile（见 docs/deploy/docker.md 第 2 节）：主机端口已被别的栈占用时用。
+# 与默认的 host profile 的差别：走 bridge 网络、不加 privileged、只发布 80/TCP 与
+# 443/TCP+UDP —— 因此**不会**发布面板动态分配的那批代理端口，要完整代理能力请用
+# 默认的 docker-compose.yml。
+#
+#   docker compose -f docker-compose.yml -f docker-compose.bridge.yml up -d
+#
+# bridge 下容器之间用 Compose 的服务名互访，连接串要写在 docker.env 里：
+#   SQLALCHEMY_DATABASE_URI="mysql+mysqldb://hiddifypanel:PASS@mariadb:3306/hiddifypanel?charset=utf8mb4"
+#   REDIS_URI_MAIN="redis://:PASS@redis:6379/1"
+# （!override / !reset 需要 Docker Compose v2.24+；更老的版本请直接改 docker-compose.yml）
+services:
+  hiddifymanager:
+    network_mode: bridge          # 覆盖 host：容器不再直接占用主机的全部端口
+    privileged: false
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  mariadb:
+    network_mode: bridge
+    ports: !override
+      - "3306:3306"               # 只对容器内发布，面板用服务名 mariadb 连接
+
+  redis:
+    network_mode: bridge
+    ports: !override
+      - "6379:6379"               # 同上，面板用服务名 redis 连接
