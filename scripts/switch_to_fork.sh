@@ -121,12 +121,24 @@ is_broken_submodule() {
     return 0
 }
 
+# release 安装的 services/panel/src 常常就是个普通目录（有源码、没有 .git），
+# 不挪开的话 submodule update 会报 "destination path ... already exists and is
+# not an empty directory"，转换直接失败（教程里"让位成 .release-backup"说的就是它）。
+needs_move_aside() {
+    local path="$1"
+    is_broken_submodule "$path" && return 0
+    [ -d "$path" ] || return 1
+    [ -e "$path/.git" ] && return 1
+    [ -n "$(ls -A "$path" 2>/dev/null)" ] || return 1
+    return 0
+}
+
 fixup_broken_submodules() {
     local path dest
     while IFS= read -r path; do
         [ -n "$path" ] || continue
         [ -d "$path" ] || continue
-        is_broken_submodule "$path" || continue
+        needs_move_aside "$path" || continue
         warn "移开半残子模块 ${path#"$ROOT"/}"
         dest="${path}.release-backup"
         [ -e "$dest" ] && dest="${dest}.$(date +%s)"

@@ -189,12 +189,24 @@ is_broken_submodule() {
     return 0
 }
 
+# release / zip 安装把子模块路径留成普通目录（有源码、没有 .git）时同样要挪开，
+# 否则 submodule update 报 "destination path ... already exists and is not an
+# empty directory"。判定只看有没有 .git，避免误伤属主不同的好仓库；空目录不挪。
+needs_move_aside() {
+    local path="$1"
+    is_broken_submodule "$path" && return 0
+    [ -d "$path" ] || return 1
+    [ -e "$path/.git" ] && return 1
+    [ -n "$(ls -A "$path" 2>/dev/null)" ] || return 1
+    return 0
+}
+
 fixup_broken_submodules() {
     local path dest
     while IFS= read -r path; do
         [ -n "$path" ] || continue
         [ -d "$path" ] || continue
-        is_broken_submodule "$path" || continue
+        needs_move_aside "$path" || continue
         warn "移开半残子模块 ${path#"$ROOT"/}"
         dest="${path}.release-backup"
         [ -e "$dest" ] && dest="${dest}.$(date +%s)"
@@ -260,6 +272,9 @@ cmd_update() {
     need_root
     [ -f "$ROOT/scripts/update.sh" ] ||
         die "未找到 $ROOT/scripts/update.sh；全新机器请先用 install"
+    # 最外层 $ROOT 本身也可能属于别的用户（整包 rsync/解压过来），此时 update.sh 的
+    # git fetch 会先被 ownership 校验拦下。登记例外必须在任何 git 调用之前。
+    add_safe_directories
     restore_rendered_files
     log "正在更新 ${ROOT}"
     bash "$ROOT/scripts/update.sh" --no-gui --no-log || die "更新失败"
@@ -289,6 +304,9 @@ cmd_version() {
         warn "数据库迁移不可逆：降级到比当前更旧的大版本前，先准备好对应版本的数据库备份"
         confirm "确认切换到 $ARG ？"
         need_git
+        # 例外要先于 fetch 登记：最外层 $ROOT 属于别的用户时（整包 rsync/解压过来），
+        # git 会先报 dubious ownership，fetch 直接失败，切版本就死在第一步。
+        add_safe_directories
         git -C "$ROOT" fetch -q --tags origin || die "无法获取 tag（git fetch --tags 失败）"
         git -C "$ROOT" rev-parse -q --verify "refs/tags/$ARG" >/dev/null ||
             die "找不到 tag $ARG（先在 $ROOT 里 git fetch --tags 看看有哪些版本）"
@@ -305,8 +323,11 @@ cmd_version() {
         }
         # 不带 -x（不删被 ignore 的运行时文件），并显式排除数据与虚拟环境：
         # 裸跑 git clean -fdx 会把 data/ 一起删掉，等于把面板数据清空。
+        # *.release-backup* 也要排除：它是上一步刚挪开的半残子模块/旧目录，本来就是
+        # 留给用户确认后再手工删的兜底，被 clean 顺手删掉就等于没备份。
         git -C "$ROOT" clean -fd \
-            -e data -e generated -e .venv313 -e .venv -e 'services/panel/src/.venv*' 2>/dev/null
+            -e data -e generated -e .venv313 -e .venv -e 'services/panel/src/.venv*' \
+            -e '*.release-backup*' 2>/dev/null
         bash "$ROOT/scripts/install.sh" --no-gui --no-log || die "安装 $ARG 失败"
         log "已切换到 $ARG（detached HEAD；回到主线：git -C $ROOT checkout $BRANCH）"
         return 0

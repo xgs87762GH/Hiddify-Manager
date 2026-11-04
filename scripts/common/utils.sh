@@ -300,12 +300,27 @@ is_broken_submodule() {
     return 0
 }
 
+# 还有一种更常见的残留：release / zip 安装把子模块路径留成了**普通目录**，
+# 里面是面板源码但根本没有 .git。submodule update 会直接失败：
+#   fatal: destination path '.../services/panel/src' already exists and is not
+#          an empty directory.
+# 判定只看"有没有 .git"，不能用 rev-parse（属主不同的好仓库会被误判挪走）；
+# 空目录不挪，交给 git 自己填。
+needs_move_aside() {
+    local path="$1"
+    is_broken_submodule "$path" && return 0
+    [ -d "$path" ] || return 1
+    [ -e "$path/.git" ] && return 1
+    [ -n "$(ls -A "$path" 2>/dev/null)" ] || return 1
+    return 0
+}
+
 fixup_broken_submodules() {
     local path dest
     while IFS= read -r path; do
         [ -n "$path" ] || continue
         [ -d "$path" ] || continue
-        is_broken_submodule "$path" || continue
+        needs_move_aside "$path" || continue
         warning "移开半残子模块 ${path#"$HIDDIFY_DIR"/}"
         dest="${path}.release-backup"
         [ -e "$dest" ] && dest="${dest}.$(date +%s)"
