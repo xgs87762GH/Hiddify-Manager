@@ -19,11 +19,13 @@
 #
 # Usage: bash scripts/tests/smoke_update.sh [iterations]
 #
-# WARNING: this test *deletes everything* under /opt/hiddify-manager (only data/
-# is stashed and put back). That is fine on a throwaway CI runner, but running it
-# on a live server destroys the installed instance. It therefore refuses to start
-# when that path looks like a real installation; set SMOKE_ALLOW_DESTRUCTIVE=1 to
-# override (only on a machine you are willing to lose).
+# WARNING: this test *deletes everything* under /opt/hiddify-manager on every
+# iteration and runs update.sh against a fixture clone there. The real
+# installation (source / .git / .venv313 / mysql / redis / certs) is now moved
+# aside whole and restored on exit, so a normal run is safe on a live server.
+# It still refuses to start when that path looks like a real installation; set
+# SMOKE_ALLOW_DESTRUCTIVE=1 to override. Only run it on a machine you can afford
+# to leave mid-run if the process is killed before its EXIT trap restores $ROOT.
 set -u
 
 ITERATIONS="${1:-10}"
@@ -103,14 +105,23 @@ prepare_env() {
 }
 
 restore_preexisting() {
-    [ -d "$ROOT.data.preexisting" ] && rm -rf "$ROOT/data" && mv "$ROOT.data.preexisting" "$ROOT/data"
+    # prepare_env wipes $ROOT/* every iteration and leaves a fixture clone there
+    # at the end; discard that and put the real installation back exactly as we
+    # found it (source + data + venv), so a live server is fully restorable.
+    if [ -d "$ROOT.full.preexisting" ]; then
+        rm -rf "$ROOT"
+        mv "$ROOT.full.preexisting" "$ROOT"
+    fi
     return 0
 }
 
 stash_preexisting() {
-    # never lose whatever is already in /opt/hiddify-manager on this machine
-    if [ -d "$ROOT/data" ] && [ -n "$(ls -A "$ROOT/data" 2>/dev/null)" ]; then
-        mv "$ROOT/data" "$ROOT.data.preexisting"
+    # Back up the ENTIRE real installation, not just data/: prepare_env does
+    # `rm -rf "$ROOT"/*` on every iteration, so only a full backup keeps a live
+    # server (source / .git / .venv313 / mysql / redis / certs) restorable.
+    if [ -d "$ROOT" ] && [ -n "$(ls -A "$ROOT" 2>/dev/null)" ]; then
+        rm -rf "$ROOT.full.preexisting"
+        mv "$ROOT" "$ROOT.full.preexisting"
     fi
 }
 
@@ -151,21 +162,42 @@ EOF
     echo "$work"
 }
 
-# The update.sh a server installed before these fixes: take it out of git
-# history so the scenario matches what is really deployed, not a guess.
+# The update.sh a server installed before these fixes: 优先从历史里取真件，
+# 但历史可能被压缩/重写（这里就没有这个 commit），必须有不依赖具体 commit 的退路：
+# 从当前脚本里整块摘掉"后加的那三处"，得到语法合法、行为等价于修复前的版本。
+# 早先的按行 awk 退路会切坏脚本（local: can only be used in a function），
+# 让 D 变成假失败、还连累 F。
 PRE_FIX_COMMIT=3d81605c
 old_update_sh() {
     if git -C "$REPO" cat-file -e "$PRE_FIX_COMMIT:scripts/update.sh" 2>/dev/null; then
-        git -C "$REPO" show "$PRE_FIX_COMMIT:scripts/update.sh"
-        return
+        local cand
+        cand=$(git -C "$REPO" show "$PRE_FIX_COMMIT:scripts/update.sh")
+        case "$cand" in
+            *add_safe_directories*) ;;   # 拿到的不是修复前那份，走退路
+            *) printf '%s\n' "$cand"; return ;;
+        esac
     fi
-    awk '
-      /^# This script runs from a copy in \/tmp/ {skip=1; next}
-      skip==1 && /^}$/ {skip=0; next}
-      skip==1 {next}
-      {print}
-    ' "$REPO/scripts/update.sh" |
-        awk '/hand_over_to_new_script/ && !/^#/ {next} {print}'
+    local out
+    out=$(awk '
+      # ① 自带的 add_safe_directory(s) 定义块（if ! declare -F ... fi）
+      /^if ! declare -F add_safe_directories/ { blk = 1; next }
+      blk && /^fi$/ { blk = 0; next }
+      blk { next }
+      # ② 自我交接函数本体
+      /^function hand_over_to_new_script\(\)/ { fn = 1; next }
+      fn && /^}$/ { fn = 0; next }
+      fn { next }
+      # ③ 两处调用点：留个 no-op，别把语法搞坏
+      /^[[:space:]]*add_safe_directories[[:space:]]*$/ { print "    :"; next }
+      /^[[:space:]]*hand_over_to_new_script[[:space:]]/ { print "    :"; next }
+      { print }
+    ' "$REPO/scripts/update.sh")
+    # 退化产物必须是能跑的脚本，否则 D 的"假失败"会连累 F
+    printf '%s\n' "$out" | bash -n /dev/stdin 2>/dev/null || {
+        echo "old_update_sh: 生成的老版本 update.sh 语法不合法" >&2
+        return 1
+    }
+    printf '%s\n' "$out"
 }
 
 # --------------------------------------------------------------- helpers -----
