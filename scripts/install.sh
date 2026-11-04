@@ -187,7 +187,13 @@ function main() {
         add_task "Telegram 代理" install_run services/telegram "$telegram_on"
         # Deprecated: hiddify-core serves SS FakeTLS with its own simple-obfs server; this only removes obfs-server
         add_task "FakeTLS 代理" install_run services/ssfaketls false
-        add_task "WARP" install_run services/warp 1
+        # WARP 在 warp_mode=disable 时整个出站都不启用（outbounds.on_warp_mode_changed），
+        # 却一直被硬编码成开启：每次安装/应用配置都白跑一遍 wgcf 注册（常被 Cloudflare 429，
+        # 实测能拖十几分钟）+ 连通性探测，还平白拉起一个没人用的 warp 网卡。
+        # 传 false 让 runsh 走 disable.sh（停用并清理），与 restart.sh 跳过 wg-quick@warp 的判断保持一致。
+        maybe_warp=true
+        [ "$(hconfig warp_mode)" = "disable" ] && maybe_warp=false
+        add_task "WARP" install_run services/warp "$maybe_warp"
         add_task "Xray" install_run services/xray 1
     fi
     add_task "WireGuard" install_run services/wireguard "$(hconfig "wireguard_enable")"
