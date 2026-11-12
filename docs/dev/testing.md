@@ -84,6 +84,21 @@ done
 
 实测 10 轮全 `28 passed`，耗时稳定 0.10–0.12 s。**无 flaky**。
 
+### 用量存储过程回归（v14.2.7b2）
+
+`tests/test_usage_procedure.py` 是独立的 `unittest` 套件（13 例），与上面的 28 个 pytest
+渲染用例分开统计，覆盖面板 `add_usage_json` 存储过程的自愈逻辑：方言跳过、已存在不重建、
+缺失才执行 DDL、查询/DDL 异常不外抛且回滚、失败 5 分钟节流、成功后清除标记、1305 只识别
+不误吞其它数据库错误。模块按文件路径加载，**不需要 Flask/SQLAlchemy/loguru**，裸 Python 即可跑：
+
+```bash
+cd services/panel/src && python -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+端到端验证在**独立临时库**上做（不碰 `hiddifypanel`）：建最小 `user` 表 → 缺失时建过程 →
+再次调用确认幂等 → `CALL` 后断言 `current_usage` 与 `last_online` 都写入 → `DROP PROCEDURE`
+模拟 1305 → 自愈重建后 `CALL` 成功 → 最后 `DROP DATABASE`。真机（MariaDB 10.6）实测通过。
+
 ---
 
 ## 3. 前端
