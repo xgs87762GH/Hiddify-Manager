@@ -106,7 +106,7 @@ scenario_w1_warp_decision_table() {
                "warp|warp|0|true|true" \
                "warp_reality|warp_reality|0|true|true" \
                "warp-no-tos|warp|0||false" \
-               "missing-mode||0|true|false" \
+               "missing-mode||0|true|true" \
                "hconfig-fails||1|true|false" \
                "capital-Disable|Disable|0|true|true" \
                "whitespace| disable |0|true|true"; do
