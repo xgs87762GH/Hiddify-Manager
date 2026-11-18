@@ -497,3 +497,96 @@ bash scripts/tests/smoke_install_tasks.sh 10
 **结论**：五条生命周期命令的全部状态（含输入校验、降级、升级、reinstall、switch 幂等）均逐条验证通过，
 线上实例最终稳定在 `v14.2.6`、`db_version=189`、8 个服务 active。仅 GitHub 拉取受代理网络波动影响
 （已通过重试驱动覆盖），WARP / curl 死等属环境交互（已规避），fork 逻辑本身无缺陷。
+
+---
+
+## 10. 两轮全量回归（14.2.7b2 → 合并 14.5.0b2）
+
+> 详细数据与差异表见工作区 `document/测试计划_1427_1450.md`、`document/测试结果_基线1427.md`、
+> `document/测试结果_合并1450.md`。本节只记**怎么复跑**。
+
+两轮用**同一套用例**，只换被测版本，差异即合并引入的回归。判定只有 PASS / FAIL / 阻塞（附日志）。
+
+| 用例 ID | 层 | 脚本 / 命令 | 基线 14.2.7b2 | 合并 14.5.0b2 |
+| --- | --- | --- | --- | --- |
+| S | 离线冒烟 | `scripts/tests/smoke_*.sh 2`（7 套件 ×2 轮） | 14/14 | 14/14（修 WARP 条款门控、docker 安装器、决策表后） |
+| U | 单测/静态 | `pytest -q` / `vue-tsc` / `vite build` / `ruff` | 60 passed + 18 subtests | **167 passed + 94 subtests，1 skipped** |
+| A | 服务/端口 | `smoke_api_admin.sh` 的 apply 段 + `status.sh` | 17/17 | 17/17 |
+| B | 面板/API | `smoke_api_admin.sh` | 覆盖 | 17/17 |
+| C | 订阅 | `smoke_subscription.sh` | 覆盖 | 25/25（+2 SKIP：库里没有禁用/超额用户） |
+| D | 代理/生成侧 | `smoke_proxy_matrix.sh` | 覆盖 | 7/7（+不可达 SKIP） |
+| E | 备份恢复 | `smoke_backup_restore.sh 3` | 22/22 | 22/22 |
+| G | UI | Playwright 14 路由 + 主题 | 15/15 | 15/15 |
+| H | 压测 | `tools/load/load_driver.py --concurrency 200 --duration 300` | 6.3 rps / 160 s 自恢复 | 6.3 rps / **修复后 250 s 自恢复**（修复前不恢复） |
+
+合并轮发现并修掉的 7 处回归（R1–R7）见 `document/测试结果_合并1450.md` §2，其中 R7 是
+「14.5 默认 `telegram_webproxy_enable=1` + telemt API 每 5 s 超时打满面板线程」导致的压测后永久卡死。
+
+### 10.1 新增的在线套件（都在仓库里，拉取即可复跑）
+
+§7 那批套件是**纯离线**的；下面这些需要一台正在运行的实例，共用 `scripts/tests/lib_online.sh`。
+检测不到实例会打印 `SKIP` 并退出 0，不会破坏离线 CI。凭证全部从本机 DB / 环境变量发现，
+**脚本里不写死任何主机、UUID 或口令**；非 root 且 sudo 要口令时用 `SUDO_PASS` 环境变量传入。
+
+| 脚本 | 覆盖 | 用法 |
+| --- | --- | --- |
+| `lib_online.sh` | 凭证发现、HTTP 断言、`ok/bad/skip` 计数、退出码闸门 | 被 source，不单独执行 |
+| `smoke_subscription.sh` | 6 个订阅端点 + `Subscription-Userinfo` + 节点非空 + 错 uuid/超长 uuid/异常 UA/授权头/禁用/超额用户不得 5xx | `bash scripts/tests/smoke_subscription.sh [轮数]` |
+| `smoke_api_admin.sh` | admin REST v2 读接口、认证负例、用户 `POST→GET→PATCH→DELETE` 往返、apply 生效；退出时（含失败）清理自建用户 | `bash scripts/tests/smoke_api_admin.sh [轮数]` |
+| `smoke_proxy_matrix.sh` | 生成侧参数自洽（TLS 必带 sni/host、xhttp 必带 path）、ALPN 协商取样、`full-singbox.json` 可解析、xhttp H1 腿计数 | `bash scripts/tests/smoke_proxy_matrix.sh [轮数]` |
+| `smoke_backup_restore.sh` | `mysqldump` + `data/generated` 打包 → `DROP DATABASE` → 恢复 → 复验，默认 3 轮 | `bash scripts/tests/smoke_backup_restore.sh [轮数]`（**破坏性**） |
+| `../../services/panel/src/tests/test_sublink_client_capability.py` | `ctx_client` 的客户端域名过滤 + PR#68 能力过滤门禁 | 在 panel 根目录跑 `pytest tests -q` |
+| `tools/load/load_driver.py` | 200 并发压测，输出 p50/p95/p99、错误率、granian RSS、分钟计数 | `python3 tools/load/load_driver.py --concurrency 200 --duration 300 --url ...` |
+
+**踩过的坑，已写死在脚本里**：
+
+1. `$ROOT/data` 里含 MariaDB datadir `data/mysql`，备份**和解包都必须排除**，否则 datadir 变 root 属主、表只读、面板 500。
+2. dump 用 `--databases hiddifypanel`（不是 `--all-databases`），SQL 自带 `CREATE DATABASE`/`USE`；
+   此时**不要**加 `--one-database`，它会把带库名的语句过滤掉，恢复直接失败。
+3. 备份目录在 `/tmp`，绝不能放进 `$ROOT/data`，否则 tar 会把自己打进去、体积滚雪球。
+4. apiflask 的 `MethodView` 路由要求**尾部斜杠**：`/api/v2/admin/user/<uuid>` 返回 308，
+   `/api/v2/admin/user/<uuid>/` 才 200。
+5. 面板源码树属主是 `hiddify-panel`，普通用户不能写 `tests/__pycache__`；pytest 要以 root 跑或设 `PYTHONDONTWRITEBYTECODE=1`。
+6. 计数只算 `user.deleted=0`：`User.remove()` 是软删，否则 CRUD 用例会污染备份恢复的基线数字。
+
+### 10.2 PR#68 与 xhttp H1 的可执行门禁
+
+`test_sublink_client_capability.py` 默认对 `PR#68 未合并`这一事实给出 **1 个 skip**，
+并对现有 `_client_domain_allowed()` / `expand_client_domains()` / `iter_ctx_domains()` 做真实断言。
+cherry-pick PR#68 之后用 `HIDDIFY_EXPECT_PR68=1 pytest tests/test_sublink_client_capability.py` 跑，
+缺少能力过滤函数就会变红。在线侧对应 `HIDDIFY_EXPECT_NO_H1=1 bash scripts/tests/smoke_proxy_matrix.sh`：
+若订阅里仍出现 `xhttp + ALPN http/1.1` 的腿则 FAIL。
+
+> 合并官方 14.5.0b2 **没有**修好 xhttp H1：ALPN 层协商正常，问题在生成侧仍下发 H1 腿 +
+> haproxy 路径路由返回 404。当前规避手段是改用 H2 变体或在 Base configs 停用 H1 变体。
+
+### 10.3 `status.sh` 为什么不需要跟着 14.5 改
+
+计划里曾把 `status.sh [MODIFY]` 列为合并后必做项。核实代码后确认**无需改动**：
+`status.sh` 遍历 `hiddify_service_units()`，而该函数（`scripts/common/utils.sh`）动态扫描
+`$HIDDIFY_SERVICES/*/*.service` 与 `*/*/*.service`，并排除 `deprecated/` 和 `@` 模板单元。
+14.5 新增的 OpenVPN / WARP masque 单元放进 `services/` 后会**自动纳入**状态输出，
+再加一份硬编码清单反而会制造第二处需要同步的地方（违反低耦合）。
+两轮 A 组用例均已验证该枚举结果（7 个必需单元 active）。
+
+### 10.4 换到另一台电脑怎么复跑
+
+```bash
+git -C hiddifypanel pull
+git -C Hiddify-Manager pull
+git -C Hiddify-Manager submodule update --init --recursive
+# 在测试机上（或本机直连面板）：
+cd Hiddify-Manager
+bash scripts/tests/smoke_subscription.sh 2
+bash scripts/tests/smoke_api_admin.sh 2
+bash scripts/tests/smoke_proxy_matrix.sh 2
+bash scripts/tests/smoke_backup_restore.sh 3          # 破坏性，只在测试机
+python3 tools/load/load_driver.py --concurrency 200 --duration 300 \
+    --url "http://127.0.0.1:9000/<proxy_path>/api/v2/admin/me/" --auth '<base64>' \
+    --url "http://127.0.0.1:9000/<proxy_path>/<user_uuid>/auto/"
+```
+
+本机到 VM 的推送 / 远端执行 / 端口隧道脚本（`tools/vm/*.ps1`、`tools/vm/tests/*.sh`，工作区根）
+属于**一次性环境工具，未入库**：里面带具体测试机的地址、sudo 口令与 Posh-SSH 模块路径，
+不适合放进仓库。换电脑用标准 `scp` / `ssh` 把脚本拷到测试机再 `bash` 执行即可，
+上面 6 个用例本身不依赖这些工具。
