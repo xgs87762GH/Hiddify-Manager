@@ -95,6 +95,14 @@ hconfig() {
     [ -f "$f" ] && cat "$f"
     return 0
 }
+# 与 scripts/common/utils.sh 的 warp_in_use 同义：模式非 disable 且管理员已接受条款
+warp_in_use() {
+    local mode accepted
+    mode=$(hconfig warp_mode) || mode=disable
+    [[ "$mode" == "disable" ]] && return 1
+    accepted=$(hconfig warp_tos_accepted) || return 1
+    [[ "$accepted" == "true" ]]
+}
 error() { echo "ERROR: $*"; }
 warning() { echo "WARN: $*"; }
 log_file() { echo "${HIDDIFY_DIR:-/opt/hiddify-manager}/data/log/$1.log"; }
@@ -143,7 +151,11 @@ mkroot() { # $1=场景名
     mkdir -p "$STATE"
 }
 
-set_warp() { echo "$1" >"$ROOT/.fixture/warp_mode"; }
+set_warp() {
+    echo "$1" >"$ROOT/.fixture/warp_mode"
+    echo "true" >"$ROOT/.fixture/warp_tos_accepted"
+}
+set_warp_tos() { rm -f "$ROOT/.fixture/warp_tos_accepted"; [ -n "${1:-}" ] && echo "$1" >"$ROOT/.fixture/warp_tos_accepted"; return 0; }
 busy() { : >"$STATE/$1.active"; }
 idle() { rm -f "$STATE/$1.active"; }
 calls() { cat "$CALLS" 2>/dev/null; }
@@ -307,6 +319,14 @@ scenario_s2_status_warp_probe() {
         ok "S2 warp 开启时才调用 services/warp/status.sh" || bad "S2 warp 开启却没有探测 WARP"
     [ "$(log_tail status | tail -n 1)" = "$MARK" ] &&
         ok "S2 warp 开启时日志末行仍是结束标记" || bad "S2 warp 开启时标记丢失"
+
+    # 14.5 起 WARP 还要求管理员接受 Cloudflare 条款：未接受时不应探测/重启 WARP
+    set_warp_tos ""
+    : >"$CALLS"
+    out=$(run_script status.sh); rc=$?
+    [ "$rc" = "0" ] && ok "S2 warp 已启用但未接受条款时退出 0" || bad "S2 未接受条款时退出 $rc"
+    grep -q "warp-status-called" "$CALLS" &&
+        bad "S2 未接受条款却探测了 WARP" || ok "S2 未接受条款时不探测 WARP"
 }
 
 # -------------------------------------------------------------------- driver ---

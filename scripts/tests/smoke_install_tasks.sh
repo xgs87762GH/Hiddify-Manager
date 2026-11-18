@@ -38,7 +38,7 @@ DECISION_SRC=""
 
 extract_snippets() {
     RUNSH_SRC=$(awk '/^function runsh\(\) \{/{f=1} f{print} f&&/^\}$/{exit}' "$INSTALL_SH")
-    DECISION_SRC=$(awk '/maybe_warp=true/{f=1} f{print} f&&/add_task "WARP"/{exit}' "$INSTALL_SH")
+    DECISION_SRC=$(awk '/warp_on=false/{f=1} f{print} f&&/add_task "WARP"/{exit}' "$INSTALL_SH")
     [ -n "$RUNSH_SRC" ] ||
         { echo "FATAL: 没能从 install.sh 截出 runsh 函数（脚本结构变了？）" >&2; exit 2; }
     [ -n "$DECISION_SRC" ] ||
@@ -48,12 +48,27 @@ extract_snippets() {
 }
 
 # 用假 hconfig 跑一遍决策片段，返回 add_task 传出去的最后一个参数
-decide_warp() { # $1=warp_mode 文本 $2=hconfig 退出码
-    local mode="$1" hrc="${2:-0}"
+# $1=warp_mode 文本 $2=hconfig 退出码 $3=warp_tos_accepted 文本（默认 true）
+decide_warp() {
+    local mode="$1" hrc="${2:-0}" tos="${3-true}"
     (
         add_task() { printf '%s\n' "${@: -1}"; }
         install_run() { :; }
-        hconfig() { [ -n "$mode" ] && printf '%s\n' "$mode"; return "$hrc"; }
+        hconfig() {
+            case "$1" in
+                warp_mode) [ -n "$mode" ] && printf '%s\n' "$mode" ;;
+                warp_tos_accepted) [ -n "$tos" ] && printf '%s\n' "$tos" ;;
+            esac
+            return "$hrc"
+        }
+        # 与 scripts/common/utils.sh 同义：模式非 disable 且条款已接受
+        warp_in_use() {
+            local m a
+            m=$(hconfig warp_mode) || m=disable
+            [[ "$m" == "disable" ]] && return 1
+            a=$(hconfig warp_tos_accepted) || return 1
+            [[ "$a" == "true" ]]
+        }
         eval "$DECISION_SRC"
     ) 2>/dev/null
 }
@@ -85,17 +100,18 @@ EOF
 
 # ---------------------------------------------------------------- 场景 ----------
 scenario_w1_warp_decision_table() {
-    log "W1: WARP 决策表（只有精确的 disable 才关）"
-    local case_name mode rc want got
-    for row in "disable|disable|0|false" \
-               "warp|warp|0|true" \
-               "warp_reality|warp_reality|0|true" \
-               "missing||0|true" \
-               "hconfig-fails||1|true" \
-               "capital-Disable|Disable|0|true" \
-               "whitespace| disable |0|true"; do
-        IFS='|' read -r case_name mode rc want <<<"$row"
-        got=$(decide_warp "$mode" "$rc")
+    log "W1: WARP 决策表（模式非 disable 且条款已接受才开）"
+    local case_name mode rc tos want got
+    for row in "disable|disable|0|true|false" \
+               "warp|warp|0|true|true" \
+               "warp_reality|warp_reality|0|true|true" \
+               "warp-no-tos|warp|0||false" \
+               "missing-mode||0|true|false" \
+               "hconfig-fails||1|true|false" \
+               "capital-Disable|Disable|0|true|true" \
+               "whitespace| disable |0|true|true"; do
+        IFS='|' read -r case_name mode rc tos want <<<"$row"
+        got=$(decide_warp "$mode" "$rc" "$tos")
         [ "$got" = "$want" ] && ok "W1 [$case_name] 传给 install_run 的是 $want" ||
             bad "W1 [$case_name] 传的是 '$got'（期望 $want）"
     done

@@ -1,124 +1,79 @@
 #!/bin/bash
-# Docker one-liner installer.
-#   bash <(curl -fsSL https://i.hiddify.com/docker/release)   # → :latest
-#   bash <(curl -fsSL https://i.hiddify.com/docker/beta)      # → :beta
-#   bash <(curl -fsSL https://i.hiddify.com/docker/dev)       # → :dev
-# Or directly:
-#   bash <(curl -fsSL …/scripts/common/docker-installer.sh) beta
-#
-# Override sources for testing (optional):
-#   HIDDIFY_DOCKER_COMPOSE_URL=… HIDDIFY_DOCKER_ENV_URL=… bash docker-installer.sh beta
-# Force a git source build instead of pulling :dev:
-#   HIDDIFY_DOCKER_BUILD=1 bash docker-installer.sh dev
-set -euo pipefail
 
+# 若未安装 Docker 则先安装
 command -v docker &>/dev/null || curl -fsSL https://get.docker.com | sh
 
-RAW_TAG=${1:-latest}
-# i.hiddify.com passes release|beta|dev — map to published ghcr tags.
-case "$RAW_TAG" in
-    release|stable|latest|"") IMAGE_TAG=latest; MODE=pull ;;
-    beta) IMAGE_TAG=beta; MODE=pull ;;
-    dev|develop)
-        IMAGE_TAG=dev
-        if [ "${HIDDIFY_DOCKER_BUILD:-0}" = "1" ]; then MODE=build; else MODE=pull; fi
-        ;;
-    build|source) IMAGE_TAG=dev; MODE=build ;;
-    *) IMAGE_TAG=$RAW_TAG; MODE=pull ;; # e.g. v10.86.0b5
-esac
+# 未指定 TAG 时默认 latest
+TAG=${1:-latest}
 
-COMPOSE_URL=${HIDDIFY_DOCKER_COMPOSE_URL:-https://raw.githubusercontent.com/hiddify/Hiddify-Manager/refs/heads/main/docker-compose.yml}
-ENV_URL=${HIDDIFY_DOCKER_ENV_URL:-https://raw.githubusercontent.com/hiddify/Hiddify-Manager/refs/heads/main/docker.env}
-
+# 检查 hiddify-manager 目录是否已存在
 if [ -d "hiddify-manager" ]; then
-    echo 'Folder "hiddify-manager" already exists. Please change the directory to install with Docker.'
+    echo '目录 "hiddify-manager" 已存在。请切换到其他目录后再用 Docker 安装。'
     exit 1
 fi
 
-set_env() {
-    local key=$1
-    local val=$2
-    if [ ! -f docker.env ]; then
-        touch docker.env
-    fi
-    if grep -q "^${key}=" docker.env; then
-        local escaped
-        escaped=$(printf '%s' "$val" | sed -e 's/[&\\]/\\&/g' -e 's/|/\\|/g')
-        sed -i "s|^${key}=.*|${key}=${escaped}|" docker.env
-    else
-        printf '%s=%s\n' "$key" "$val" >> docker.env
-    fi
-}
-
-activate_image() {
-    # Prefer a prebuilt image; never require a local Dockerfile for pull installs.
-    # Preserve YAML indentation when commenting/uncommenting keys.
-    local tag=$1
-    if grep -qE '^[[:space:]]*image:[[:space:]]*ghcr\.io/hiddify/hiddify-manager:' docker-compose.yml; then
-        sed -i -E "s|^([[:space:]]*image:[[:space:]]*ghcr\.io/hiddify/hiddify-manager:)[^[:space:]#]+|\1${tag}|" docker-compose.yml
-    elif grep -qE '^[[:space:]]*#image:[[:space:]]*ghcr\.io/hiddify/hiddify-manager:' docker-compose.yml; then
-        # Uncomment the first matching image line and set the tag (drop trailing inline comments).
-        sed -i -E "0,/^[[:space:]]*#image:[[:space:]]*ghcr\.io\/hiddify\/hiddify-manager:/s|^([[:space:]]*)#image:[[:space:]]*ghcr\.io/hiddify/hiddify-manager:[^[:space:]#]*.*|\1image: ghcr.io/hiddify/hiddify-manager:${tag}|" docker-compose.yml
-    else
-        echo "docker-compose.yml has no hiddify-manager image line; cannot install tag '$tag' without a Dockerfile." >&2
-        exit 1
-    fi
-    sed -i -E 's|^([[:space:]]*)build: \.|\1#build: .|' docker-compose.yml
-}
-
-activate_build() {
-    sed -i -E \
-        -e 's|^([[:space:]]*)image: ghcr\.io/hiddify/hiddify-manager:|\1#image: ghcr.io/hiddify/hiddify-manager:|' \
-        -e 's|^([[:space:]]*)#build: \.|\1build: .|' \
-        docker-compose.yml
-    if ! grep -qE '^[[:space:]]*build: \.' docker-compose.yml; then
-        sed -i '/^  hiddifymanager:/a\    build: .' docker-compose.yml
-    fi
-}
-
-write_passwords() {
-    local mysqlpassword redispassword
-    mysqlpassword=$(< /dev/urandom tr -dc 'a-zA-Z0-9' | head -c49; echo)
-    redispassword=$(< /dev/urandom tr -dc 'a-zA-Z0-9' | head -c49; echo)
-    touch docker.env
-    set_env MYSQL_PASSWORD "$mysqlpassword"
-    set_env REDIS_PASSWORD "$redispassword"
-    set_env MYSQL_DATABASE hiddifypanel
-    set_env MYSQL_USER hiddifypanel
-    set_env SQLALCHEMY_DATABASE_URI "mysql+mysqldb://hiddifypanel:${mysqlpassword}@127.0.0.1:3306/hiddifypanel?charset=utf8mb4"
-    set_env REDIS_URI_MAIN "redis://:${redispassword}@127.0.0.1:6379/1"
-}
-
-echo "Hiddify Docker install: mode=$MODE image_tag=$IMAGE_TAG (arg=$RAW_TAG)"
-
-if [ "$MODE" = "build" ]; then
-    command -v git &>/dev/null || (echo "Installing Git..."; sudo apt-get update && sudo apt-get install -y git)
-    git clone --recurse-submodules -b dev https://github.com/hiddify/Hiddify-Manager.git
-    cd Hiddify-Manager
-    activate_build
+# 下载 docker-compose.yml；如果指定的是开发分支则直接克隆项目
+if [[ "$TAG" == "develop" || "$TAG" == "dev" ]]; then
+    # 若未安装 Git 则先安装
+    command -v git &>/dev/null || (echo "正在安装 Git……"; sudo apt-get update && sudo apt-get install -y git)
+    : "${HIDDIFY_MANAGER_REPO:=xgs87762GH/Hiddify-Manager}"
+    : "${HIDDIFY_MANAGER_BRANCH:=dev-custom}"
+    git clone -b "$HIDDIFY_MANAGER_BRANCH" "https://github.com/${HIDDIFY_MANAGER_REPO}.git" hiddify-manager
+    cd hiddify-manager
+    git submodule update --init --recursive
+    # 本地源码构建：compose 文件里默认是拉取已发布镜像，这里改为本地 build。
+    sed -i 's|^[[:space:]]*image: ghcr.io/xgs87762gh/hiddify-manager:.*|# &|; s|^[[:space:]]*#build: \.|    build: .|' docker-compose.yml
     docker compose -f docker-compose.yml build
 else
-    mkdir hiddify-manager
-    cd hiddify-manager
-    if [[ "$COMPOSE_URL" == file://* ]]; then
-        cp "${COMPOSE_URL#file://}" docker-compose.yml
-        cp "${ENV_URL#file://}" docker.env
-    else
-        wget -q -O docker-compose.yml "$COMPOSE_URL"
-        wget -q -O docker.env "$ENV_URL"
-    fi
-    activate_image "$IMAGE_TAG"
-    docker compose pull
+  # 创建 hiddify-manager 目录
+  mkdir hiddify-manager
+  cd hiddify-manager
+  : "${HIDDIFY_MANAGER_REPO:=xgs87762GH/Hiddify-Manager}"
+  : "${HIDDIFY_MANAGER_BRANCH:=dev-custom}"
+  wget "https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/${HIDDIFY_MANAGER_BRANCH}/docker-compose.yml"
+  wget "https://raw.githubusercontent.com/${HIDDIFY_MANAGER_REPO}/refs/heads/${HIDDIFY_MANAGER_BRANCH}/docker.env"
+  # 将镜像固定到指定 tag（latest / beta / vX.Y.Z）
+  sed -i "s|image: ghcr.io/xgs87762gh/hiddify-manager:.*|image: ghcr.io/xgs87762gh/hiddify-manager:$TAG|" docker-compose.yml
+  docker compose pull
 fi
 
-write_passwords
+# 为 MySQL 和 Redis 生成随机密码
+mysqlpassword=$(< /dev/urandom tr -dc 'a-zA-Z0-9' | head -c49; echo)
+redispassword=$(< /dev/urandom tr -dc 'a-zA-Z0-9' | head -c49; echo)
 
-if [ "${HIDDIFY_DOCKER_SKIP_UP:-0}" = "1" ]; then
-    echo "HIDDIFY_DOCKER_SKIP_UP=1: skipping docker compose up"
-    docker compose config >/dev/null
-    echo "compose config OK"
-    exit 0
+# docker.env 不存在时创建空文件
+touch docker.env
+
+# 更新或追加 Redis 密码
+if grep -q "^REDIS_PASSWORD=" docker.env; then
+    sed -i "s|^REDIS_PASSWORD=.*|REDIS_PASSWORD=$redispassword|" docker.env
+else
+    echo "REDIS_PASSWORD=$redispassword" >> docker.env
 fi
 
-docker compose up -d
+# 更新或追加 MySQL 密码
+if grep -q "^MYSQL_PASSWORD=" docker.env; then
+    sed -i "s|^MYSQL_PASSWORD=.*|MYSQL_PASSWORD=$mysqlpassword|" docker.env
+else
+    echo "MYSQL_PASSWORD=$mysqlpassword" >> docker.env
+fi
+
+# SQLAlchemy / Redis 连接串必须与上面的密码保持一致
+# （docker.env 里自带占位密码，只改 *_PASSWORD 会让面板仍用
+# mysql-strong-password / redis-strong-password 去连接，而服务端已换成新密码）。
+if grep -q "^SQLALCHEMY_DATABASE_URI=" docker.env; then
+    sed -i "s|^SQLALCHEMY_DATABASE_URI=.*|SQLALCHEMY_DATABASE_URI=\"mysql+mysqldb://hiddifypanel:${mysqlpassword}@127.0.0.1:3306/hiddifypanel?charset=utf8mb4\"|" docker.env
+else
+    echo "SQLALCHEMY_DATABASE_URI=\"mysql+mysqldb://hiddifypanel:${mysqlpassword}@127.0.0.1:3306/hiddifypanel?charset=utf8mb4\"" >> docker.env
+fi
+if grep -q "^REDIS_URI_MAIN=" docker.env; then
+    sed -i "s|^REDIS_URI_MAIN=.*|REDIS_URI_MAIN=\"redis://:${redispassword}@127.0.0.1:6379/1\"|" docker.env
+else
+    echo "REDIS_URI_MAIN=\"redis://:${redispassword}@127.0.0.1:6379/1\"" >> docker.env
+fi
+
+# 启动容器
+docker compose up -d 
+
+# 跟踪容器日志
 docker compose logs -f
