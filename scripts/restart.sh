@@ -53,9 +53,9 @@ function main() {
             *hiddify-panel*|*hiddify-cli*)
                 continue
                 ;;
-            wg-quick@warp)
-                # WARP 关闭时跳过
-                [ "$(hconfig warp_mode)" == "disable" ] && continue
+            wg-quick@warp|hiddify-warp)
+                # WARP 实际在用（模式非 disable 且已接受条款）才重启
+                warp_in_use || continue
                 ;;
         esac
         restart_service $ss &

@@ -371,9 +371,15 @@ function get_commit_version() {
         echo "无法从 GitHub 读取 $repo（$branch）的最新提交日期" >&2
         return 1
     fi
-    # 统一转成 UTC：页面给出的是提交者时区偏移（+03:30），Atom 源和 API 给的是 Z；
-    # update.sh 会拿它与已安装的 VERSION 比较，所以同一提交在各来源必须得到相同文本。
-    local utc
+    commit_version "$date"
+}
+
+# commit_version <commit date (ISO 8601)>
+# The development version of a commit: MM-DDTHH:MM of its commit date. In UTC: the page gives the committer's
+# offset (+03:30), the feed and the API give Z; update.sh compares this with the installed VERSION, and the panel
+# shows it (write_panel_commit), so every source must give the same text for the same commit.
+function commit_version() {
+    local date="$1" utc
     utc=$(date -u -d "$date" +%Y-%m-%dT%H:%M 2>/dev/null) && date="$utc"
     echo "${date:5:11}"
 }
@@ -871,6 +877,20 @@ function build_panel_ui() {
     build_panel_user_ui "$@" || return $?
 }
 
+# write_panel_commit <panel source dir>
+# Records the source's commit in hiddifypanel/COMMIT (untracked): its hash, then its version as get_commit_version
+# gives it (commit_version), so a panel installed from it shows "DEV <version> · <hash>" instead of only "DEV":
+# the installed package has no .git.
+# Only from the panel's own checkout: without its .git, git would answer with the manager's commit.
+function write_panel_commit() {
+    local src="$1" top commit date
+    top=$(git -C "$src" rev-parse --show-toplevel 2>/dev/null) || return 0
+    [ "$(realpath "$top")" = "$(realpath "$src")" ] || return 0
+    commit=$(git -C "$src" rev-parse HEAD 2>/dev/null) || return 0
+    date=$(git -C "$src" show -s --format=%cI HEAD 2>/dev/null) || return 0
+    printf '%s\n%s\n' "$commit" "$(commit_version "$date")" >"$src/hiddifypanel/COMMIT"
+}
+
 # install_panel_from_git [ref] [pip 命令]
 # 从 GitHub 安装面板（develop / tag）：克隆、构建界面、安装。
 # 不能再用 `pip install git+...`：那样装出来的面板没有界面。
@@ -892,6 +912,7 @@ function install_panel_from_git() {
     elif ! build_panel_ui "$dir/src" --force; then
         rc=1
     else
+        write_panel_commit "$dir/src"
         { $pip_cmd install -U --no-deps --force-reinstall "$dir/src" && $pip_cmd install "$dir/src"; } || rc=$?
     fi
     # 无论下载或界面构建是否失败，都要清理。
@@ -1035,12 +1056,19 @@ function link_cert_state() {
     # 向本机自己发起检查，因此即使域名走 CDN 或尚未解析也能判断。
     host="${url#https://}"
     host="${host%%/*}"
-    [[ "$host" == \[* ]] || host="${host%%:*}"  # 去掉 :port，保留完整的 [IPv6]
+    [[ "$host" == \[* ]] || host="${host%%:*}"  # strip :port, keep [IPv6] intact
     # openssl 会立刻发出 ClientHello；curl 要先加载整个 CA 证书库，在慢速设备上这比
     # rpxy-l4 为新连接等待 SNI 的 100ms 还久。这样探测会失败，一个完全有效的证书
     # 就被报成自签名。
-    if timeout 8 openssl s_client -connect 127.0.0.1:443 -servername "$host" \
-        -verify_return_error -verify_hostname "$host" </dev/null >/dev/null 2>&1; then
+    # IP 走 IP SAN 校验（-verify_hostname 只匹配 DNS 名，有效的 IP 证书会被误判成自签名），
+    # 并且和浏览器一样不带 SNI。
+    local -a check=(-servername "$host" -verify_hostname "$host")
+    if [[ "$host" == \[* || "$host" =~ ^[0-9.]+$ ]]; then
+        host="${host#[}"
+        check=(-noservername -verify_ip "${host%]}")
+    fi
+    if timeout 8 openssl s_client -connect 127.0.0.1:443 "${check[@]}" \
+        -verify_return_error </dev/null >/dev/null 2>&1; then
         echo trusted
     else
         echo self_signed
@@ -1148,7 +1176,7 @@ function print_logo() {
 function show_progress_window() {
     # 没有可用终端时（管道、cron、未加 -t 的 ssh），cli_progress 改为边产生边打印输出
     activate_python_venv
-    uv pip install -q "cli-progress>=3.0.2"
+    uv pip install -q "cli-progress>=3.0.5"
     disable_ansii_modes
     # logo 与进度；输出在按 L 后显示（同时也总会写入 --log 指定的文件）
     python -m cli_progress --title "Hiddify Manager" --logo "$HIDDIFY_LOGO" "$@"
@@ -1270,7 +1298,16 @@ function hconfig() {
     error "错误：未找到键 $key"
     return 1
 }
-#TODO: 检查不使用 venv 时的功能是否正常
+
+# Same rule as the panel's warp_may_route: WARP is on and warp_tos_accepted is the JSON boolean true.
+# A missing key (panel not migrated, or terms never accepted) is off.
+function warp_in_use() {
+    local mode accepted
+    mode=$(hconfig warp_mode 2>/dev/null) || mode=disable
+    [[ "$mode" == "disable" ]] && return 1
+    accepted=$(hconfig warp_tos_accepted 2>/dev/null) || return 1
+    [[ "$accepted" == "true" ]]
+}
 # Hiddify 的 systemd 单元列表，每行一个名字（不含 ".service"）：services/ 下一层和两层的单元文件（不含
 # services/deprecated；没有 globstar 时 ** 只匹配一层）、模板单元（hiddify-*@*）正在运行/已启用的实例，
 # 以及 WireGuard 接口。供 stop / restart / status / uninstall 使用。

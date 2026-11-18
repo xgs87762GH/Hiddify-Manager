@@ -3,7 +3,6 @@ xray|25.3.6|arm64|https://github.com/XTLS/Xray-core/releases/download/v25.3.6/Xr
 xray|25.2.21|amd64|https://github.com/XTLS/Xray-core/releases/download/v25.2.21/Xray-linux-64.zip|3e90f0bbb5bbb2b397f46fec96b0eb4a240448bf8d282666da2f80cbaaa24fe7
 xray|25.2.21|arm64|https://github.com/XTLS/Xray-core/releases/download/v25.2.21/Xray-linux-arm64-v8a.zip|5f4d82f0d02a8646a0af0debd027503c2a8a752f04dd7f0539037ca877bb2e33
 xray|24.11.30|amd64|https://github.com/XTLS/Xray-core/releases/download/v24.11.30/Xray-linux-64.zip|679d6ec1c2ecabd84ad1e2deab6e52789c52f0a387902cc72e135a3bb3949554
-xray|24.11.30|amd64|https://github.com/XTLS/Xray-core/releases/download/v24.11.30/Xray-linux-64.zip|679d6ec1c2ecabd84ad1e2deab6e52789c52f0a387902cc72e135a3bb3949554
 xray|24.11.30|arm64|https://github.com/XTLS/Xray-core/releases/download/v24.11.30/Xray-linux-arm64-v8a.zip|9c36a345e580897dbe1eb677d39022bf5d0149814ec10308099e1ea1b630a6de
 xray|24.11.11|arm64|https://github.com/XTLS/Xray-core/releases/download/v24.11.11/Xray-linux-arm64-v8a.zip|776591f3b0b0661a45bdfad40bd2e0d18873d066f78242e05e260cf27f6b11d7
 xray|24.11.11|amd64|https://github.com/XTLS/Xray-core/releases/download/v24.11.11/Xray-linux-64.zip|576efbcaf24577889429fdc8af2c590838622eff37059322a306823ed22561fc
@@ -73,5 +72,19 @@ hiddify-core|5.0.2|arm64|https://github.com/hiddify/hiddify-core/releases/downlo
 hiddify-core|5.0.2|amd64|https://github.com/hiddify/hiddify-core/releases/download/v5.0.2/hiddify-core-linux-amd64-glibc.tar.gz|5be252ec93f5d4cf852b0569f26e9a97fa99a57ed0c82711cb12d9a697a9cf30
 rpxy-l4|0.2.5|amd64|https://github.com/junkurihara/rust-rpxy-l4/releases/download/0.2.5/rpxy-l4-x86_64-unknown-linux-musl.tar.gz|38076d8ec4987e3cabd71fc309036a62647650b80aad1bab58b383be488b3130
 rpxy-l4|0.2.5|arm64|https://github.com/junkurihara/rust-rpxy-l4/releases/download/0.2.5/rpxy-l4-aarch64-unknown-linux-musl.tar.gz|7cfbb1436c22b00491dd4e5c7b7475a58506625b0abee2197167781d5ca76a17
+usque|4.2.1|amd64|https://github.com/Diniboy1123/usque/releases/download/v4.2.1/usque_4.2.1_linux_amd64.zip|4117e20695078af9c11edecd1a826c009bbc7ea0b7f64458612b4198910bc313
+usque|4.2.1|arm64|https://github.com/Diniboy1123/usque/releases/download/v4.2.1/usque_4.2.1_linux_arm64.zip|c88b061c2a567f30813d7505637d1fb6fe7ec5898b5b61fd05122409fa5ad925
 hiddify-core|5.1.0|arm64|https://github.com/hiddify/hiddify-core/releases/download/v5.1.0/hiddify-core-linux-arm64-glibc.tar.gz|65f148a8231398a545f6dfcf7fd6dd81c3fd0182d8ab624cf470c863d1d3c13c
 hiddify-core|5.1.0|amd64|https://github.com/hiddify/hiddify-core/releases/download/v5.1.0/hiddify-core-linux-amd64-glibc.tar.gz|1b6dfca925fbc943d10fccaa451bfd32802693989a56a334537a6718048cd475
+hiddify-core|5.3.0|arm64|https://github.com/hiddify/hiddify-core/releases/download/v5.3.0/hiddify-core-linux-arm64-glibc.tar.gz|ec7c08c59b070fb81fbc2966c8360303b0a3fe1cb1c8532e44318d513cb31c99
+hiddify-core|5.3.0|amd64|https://github.com/hiddify/hiddify-core/releases/download/v5.3.0/hiddify-core-linux-amd64-glibc.tar.gz|54de0af90f8bac7bd5fcfaf440bd4a5e35432603d12dec9e4d575d460fa56922
+xray|26.10.31|arm64|https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-arm64-v8a.zip|1811c8f1da0c3b6dc707ebaf1c8390e987ba39859a8f0a7aadd8526157f2ec8d
+xray|26.10.31|amd64|https://github.com/XTLS/Xray-core/releases/download/v26.10.31/Xray-linux-64.zip|e4bd9119f50ae7c41658b1abd0679ae06f98bd864a2907ff33f2f2cf7081b214
+telemt|3.5.16|arm64|https://github.com/telemt/telemt/releases/download/3.5.16/telemt-aarch64-linux-gnu.tar.gz|1e1bc87f05923b9673cbbaf34a3e50f7fdcf7d496cd24efcdb34c278ed18a659
+telemt|3.5.16|amd64|https://github.com/telemt/telemt/releases/download/3.5.16/telemt-x86_64-linux-gnu.tar.gz|e6f46b2f3becf29bfd555cec8a059e429f7c082c1af402499b3a7940cf8ebd34
+hiddify-core|5.5.5|arm64|https://github.com/hiddify/hiddify-core/releases/download/v5.5.5/hiddify-core-linux-arm64-glibc.tar.gz|459c6e874eb6971ed13fd263fa2646e370e1e618db14b70fd15a333581f7148a
+hiddify-core|5.5.5|amd64|https://github.com/hiddify/hiddify-core/releases/download/v5.5.5/hiddify-core-linux-amd64-glibc.tar.gz|9e5f1b98a4490d8d7bdb2f74456e6ab1dcaa809ea0bc99bcc8bc4c3a97fe1e8c
+hiddify-core|5.9.9|arm64|https://github.com/hiddify/hiddify-core/releases/download/v5.9.9/hiddify-core-linux-arm64-glibc.tar.gz|e1d80ee82b0ec3d9de9c21fb20b8ab9dc3b06fd1d47d99076decad5c3ff23169
+hiddify-core|5.9.9|amd64|https://github.com/hiddify/hiddify-core/releases/download/v5.9.9/hiddify-core-linux-amd64-glibc.tar.gz|4f48b21acea4d3a6678e6a357d80553d1047f9bd716d1c4de90c07186964d0c9
+hiddify-core|5.9.11|arm64|https://github.com/hiddify/hiddify-core/releases/download/v5.9.11/hiddify-core-linux-arm64-glibc.tar.gz|51e38c7c0a692752eb2e8829ebb9e1a0d8b60d9a1158fd37d5ad973c7c314036
+hiddify-core|5.9.11|amd64|https://github.com/hiddify/hiddify-core/releases/download/v5.9.11/hiddify-core-linux-amd64-glibc.tar.gz|d0d32944323bd160f52c825d217bdab4a28023374f06f168f0c769d1cd9ba718

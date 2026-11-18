@@ -163,6 +163,14 @@ function main() {
         install_run services/panel
     fi
 
+    # 配置是按「已安装的 hiddify-core 版本」渲染的（模板里的 hiddifycore_version）：
+    # 必须先装 core 再渲染，否则升级时会按旧 core 渲染，新 core 拒绝该配置（crash loop）。
+    # 第 3 步会看到它已安装，只做启动。
+    if [ "$MODE" != "apply_users" ] && [ "$DO_NOT_INSTALL" != "true" ]; then
+        update_progress "${PROGRESS_ACTION}" "Hiddify Core" 8
+        DO_NOT_RUN=true install_run services/hiddify-core
+    fi
+
     # 2) 读取面板中的配置
     if [ "$DO_NOT_RUN" != "true" ]; then
         update_progress "Hiddify 面板" "正在从面板读取配置……" 9
@@ -187,13 +195,12 @@ function main() {
         add_task "Telegram 代理" install_run services/telegram "$telegram_on"
         # Deprecated: hiddify-core serves SS FakeTLS with its own simple-obfs server; this only removes obfs-server
         add_task "FakeTLS 代理" install_run services/ssfaketls false
-        # WARP 在 warp_mode=disable 时整个出站都不启用（outbounds.on_warp_mode_changed），
-        # 却一直被硬编码成开启：每次安装/应用配置都白跑一遍 wgcf 注册（常被 Cloudflare 429，
-        # 实测能拖十几分钟）+ 连通性探测，还平白拉起一个没人用的 warp 网卡。
-        # 传 false 让 runsh 走 disable.sh（停用并清理），与 restart.sh 跳过 wg-quick@warp 的判断保持一致。
-        maybe_warp=true
-        [ "$(hconfig warp_mode)" = "disable" ] && maybe_warp=false
-        add_task "WARP" install_run services/warp "$maybe_warp"
+        # WARP 关闭（warp_mode=disable）或管理员尚未接受 Cloudflare 条款时不启用：
+        # 否则每次安装/应用配置都白跑 wgcf 注册（常被 429，实测拖十几分钟）+ 连通性探测，
+        # 还平白拉起一个没人用的 warp 网卡。传 false 让 runsh 走 disable.sh（停用并清理）。
+        warp_on=false
+        warp_in_use && warp_on=true
+        add_task "WARP" install_run services/warp "$warp_on"
         add_task "Xray" install_run services/xray 1
     fi
     add_task "WireGuard" install_run services/wireguard "$(hconfig "wireguard_enable")"

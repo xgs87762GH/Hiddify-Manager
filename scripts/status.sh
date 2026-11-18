@@ -15,8 +15,8 @@ function main(){
     
     # systemctl status --no-pager hiddify-xray hiddify-core hiddify-haproxy|cat
     
-    # WARP 未关闭时，先展示 WARP 状态
-    if [[ $(hconfig "warp_mode") != "disable" ]];then
+    # WARP 实际在用（模式非 disable 且已接受条款）时，先展示 WARP 状态
+    if warp_in_use; then
         echo -e "\n----------------------------------------------------------------"
         bash services/warp/status.sh
     fi
@@ -30,7 +30,7 @@ function main(){
     warning "- 服务状态："
     
     for s in $(hiddify_service_units); do
-        [ $s == "wg-quick@warp" ] && [ $(hconfig "warp_mode") == "disable" ] && continue
+        { [ $s == "wg-quick@warp" ] || [ $s == "hiddify-warp" ]; } && ! warp_in_use && continue
         
         [ $s == "hiddify-mysql" ] && [ "$DOCKER_MODE" == "true" ] && continue
         

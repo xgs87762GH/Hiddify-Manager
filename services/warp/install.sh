@@ -1,2 +1,2 @@
-# 只安装 wireguard 模式的 wgcf 工具（singbox 模式的安装见 warp/singbox/install.sh）
-cd wireguard&&bash install.sh
+# 14.5 起 WARP 走 usque（MASQUE）；wireguard 模式的 wgcf 安装见 warp/wireguard/install.sh
+cd usque && bash install.sh

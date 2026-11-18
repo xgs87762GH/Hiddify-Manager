@@ -1,10 +1,11 @@
 
 services:
   hiddifymanager:
-    # Published install (docker-installer.sh): pulls this image. Local/dev builds
-    # that need `build: .` should use an override file or comment the image line.
+    # 已发布镜像（docker-installer.sh 拉取的就是它）。本地源码构建时注释 image、取消 build。
     image: ghcr.io/xgs87762gh/hiddify-manager:latest
     #build: .
+    #image: ghcr.io/xgs87762gh/hiddify-manager:beta
+    #image: ghcr.io/xgs87762gh/hiddify-manager:dev
 
     restart: always
     privileged: true
@@ -32,8 +33,9 @@ services:
       - path: ./docker.env
     environment:
       MARIADB_RANDOM_ROOT_PASSWORD: 1       # Root user password
-      MYSQL_DATABASE: hiddifypanel             
-      MYSQL_USER: hiddifypanel                     
+      MYSQL_DATABASE: hiddifypanel
+      MYSQL_USER: hiddifypanel
+      # MYSQL_PASSWORD comes from docker.env (must match SQLALCHEMY_DATABASE_URI)
     volumes:
       - ./docker-data/mariadb_data:/var/lib/mysql          # Persistent storage for database files
     healthcheck:
@@ -52,7 +54,7 @@ services:
     command: sh -c "redis-server --requirepass \"$$REDIS_PASSWORD\""
     volumes:
       - ./docker-data/redis_data:/data                # Persistent storage for Redis data
-    
+
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "$$REDIS_PASSWORD", "ping"]
       interval: 5s

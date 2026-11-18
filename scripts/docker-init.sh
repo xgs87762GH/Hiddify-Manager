@@ -10,19 +10,22 @@ cp /opt/hiddify-manager/services/docker/systemctl /usr/bin/systemctl
 cp /opt/hiddify-manager/services/docker/journalctl /usr/bin/journalctl 
 
 
-# 校验 REDIS_URI_MAIN 是否设置
-if [ -z "$REDIS_URI_MAIN" ]; then
-    echo "必须设置环境变量 REDIS_URI_MAIN"
-    exit 1
- 
+# 只给了密码（安装器 / 自定义 .env）时，从中拼出连接串
+if [ -z "${REDIS_URI_MAIN:-}" ] && [ -n "${REDIS_PASSWORD:-}" ]; then
+    export REDIS_URI_MAIN="redis://:${REDIS_PASSWORD}@127.0.0.1:6379/1"
+fi
+if [ -z "${SQLALCHEMY_DATABASE_URI:-}" ] && [ -n "${MYSQL_PASSWORD:-}" ]; then
+    export SQLALCHEMY_DATABASE_URI="mysql+mysqldb://hiddifypanel:${MYSQL_PASSWORD}@127.0.0.1:3306/hiddifypanel?charset=utf8mb4"
 fi
 
-
-# 校验 SQLALCHEMY_DATABASE_URI 是否设置
-if [ -z "$SQLALCHEMY_DATABASE_URI" ]; then
-    echo "必须设置环境变量 SQLALCHEMY_DATABASE_URI"
+if [ -z "${REDIS_URI_MAIN:-}" ]; then
+    echo "env variables REDIS_URI_MAIN (or REDIS_PASSWORD) must be set"
     exit 1
- 
+fi
+
+if [ -z "${SQLALCHEMY_DATABASE_URI:-}" ]; then
+    echo "必须设置环境变量 SQLALCHEMY_DATABASE_URI（或 MYSQL_PASSWORD）"
+    exit 1
 fi
 
 source .venv313/bin/activate
