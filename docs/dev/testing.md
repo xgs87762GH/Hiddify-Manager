@@ -557,8 +557,10 @@ cherry-pick PR#68 之后用 `HIDDIFY_EXPECT_PR68=1 pytest tests/test_sublink_cli
 缺少能力过滤函数就会变红。在线侧对应 `HIDDIFY_EXPECT_NO_H1=1 bash scripts/tests/smoke_proxy_matrix.sh`：
 若订阅里仍出现 `xhttp + ALPN http/1.1` 的腿则 FAIL。
 
-> 合并官方 14.5.0b2 **没有**修好 xhttp H1：ALPN 层协商正常，问题在生成侧仍下发 H1 腿 +
-> haproxy 路径路由返回 404。当前规避手段是改用 H2 变体或在 Base configs 停用 H1 变体。
+> 结论按三层修正（见 `document/测试结果_合并1450.md` §6.3）：生成侧仍下发 H1 腿（门禁仍红）、
+> 传输侧 ALPN 协商正常、客户端侧 Windows hiddify-core **未复现 `malformed HTTP response`**
+> 且 H1 Direct 腿能完成 204 代理。裸 GET 的 404 属缺少 xhttp 握手头的预期行为，不是路径路由缺陷。
+> 规避手段仍是改用 H2 变体或在 Base configs 停用 H1 变体。
 
 ### 10.3 `status.sh` 为什么不需要跟着 14.5 改
 
@@ -590,3 +592,53 @@ python3 tools/load/load_driver.py --concurrency 200 --duration 300 \
 属于**一次性环境工具，未入库**：里面带具体测试机的地址、sudo 口令与 Posh-SSH 模块路径，
 不适合放进仓库。换电脑用标准 `scp` / `ssh` 把脚本拷到测试机再 `bash` 执行即可，
 上面 6 个用例本身不依赖这些工具。
+
+---
+
+## 11. 补齐轮：Windows 客户端、破坏性 smoke 与生命周期
+
+详细数据见 `document/测试结果_合并1450.md` §7。本节只记**新增工具怎么复跑**。
+
+### 11.1 两个 Windows 侧工具
+
+| 工具 | 用途 | 用法 |
+| --- | --- | --- |
+| `tools/client_matrix.py` | 逐条订阅节点 `HiddifyCli.exe parse → build → srun → curl.exe`，断言 204 与出口 IP，按 `xhttp/H1|H2|H3` 分组 | `python tools/client_matrix.py --links _artifacts/sub-all.txt --cli <HiddifyCli.exe> --server <VM_IP> --group xhttp --out report.json` |
+| `tools/alpn_probe.py` | 传输侧取证：SNI × ALPN offer 的真实协商结果、xhttp path 的 HTTP/1.1 首行 | `python tools/alpn_probe.py --host <VM_IP> --sni a,b,c --path /xxx --path /yyy` |
+
+关键约定：
+
+1. **判定 H1/H2/H3 必须用 `--links`（URI 层）**。`full-singbox.json` 会把 xhttp 渲染成
+   `transport.type=http`（`transport.type=xhttp` 为 0），无法还原 ALPN 语义。
+2. `--server` 只覆盖连接地址，**保留原 SNI / path / ALPN / pinned cert**；不覆盖时 NAT 后
+   的公网地址不可回连（控制组 5 s 超时）。
+3. 桌面端 `Hiddify.exe` 会占用 `build` 固定写死的 `dns-in:12337`；脚本按节点序号改成唯一端口，
+   并把结构化日志从共享的 `data/box.log` 改成每条独立文件。
+4. PowerShell 5.1 无法可靠传空字符串参数，用 `--no-exit-ip` 这类显式开关，别写 `--exit-ip-url ""`。
+5. Windows 上 `npm run typecheck` / `npm run build` 经 `bash scripts/run-with-node.sh` 包装；
+   没有 `bash` 时直接调 `node node_modules/vue-tsc/bin/vue-tsc.js -b` 与
+   `node node_modules/vite/bin/vite.js build`。若 `NODE_OPTIONS` 注入了删除保护 shim，
+   vite 的 `emptyDir` 会被拦（一次删 >500 文件），构建前清空 `NODE_OPTIONS`。
+
+实测：46 条 xhttp 连续三轮结果一致（`9 PASS / 37 FAIL`、`malformed_http=0`，无 flaky），
+服务端对 `http/1.1` 与 `h2` 都能真实协商。**客户端侧 H1 不再复现 `malformed HTTP response`**；
+生成侧仍下发 H1 腿（PR#68 门禁仍红），失败节点集中在 CDN/HC 回连与 SNI 路由，属环境限制。
+
+### 11.2 破坏性 smoke 与生命周期的执行前提
+
+- `smoke_update.sh` 的 `REPO` 由脚本位置推导，**必须从不会被 stash 的目录运行**（如 `/home/gordon/smoke-update/manager`），
+  否则 `stash_preexisting()` 把 `$ROOT` 移走后夹具自身也没了。
+- 离线套件的 `/tmp/hlm`、`/tmp/hdp` 等夹具目录此前由 root 创建，**必须 root 跑**，否则
+  `chmod: Operation not permitted`。
+- `lib_online.sh` 需要 `export SUDO_PASS`，否则 `discover` 读不到 DB，4 个在线套件会**假 SKIP**（退出 0 但什么都没测）。
+- 恢复 DB 时 `sudo -S mysql -uroot < dump.sql` 会让 `< file` 覆盖密码 stdin；用
+  `sudo -S bash -c "mysql -uroot < dump.sql"` 包装。Redis 有 `requirepass`，`flushall` 要带 `-a`。
+- `pkill -f granian` 会匹配到承载它的 `bash -c` 命令行自身，用 `pkill -f '[g]ranian'`。
+- `git submodule update --force` 会把 panel 推回 Manager 的 gitlink；合并轮必须把 panel
+  显式切回 `upstream-merge-1450`，否则旧提交缺 `hiddify` 版本桩、pytest 10 个用例变红（非产品回归）。
+
+合并轮破坏性 `smoke_update.sh 1` → `pass=18 fail=0`；生命周期
+`14.5.0b2 → v14.5.0b1 → v14.5.0b2 → v14.2.7b2` 中，前两步 RC=0，跨大版本降级 **RC=4**
+且报 `LookupError: 'openvpn' is not among the defined enum values. Enum name: templatecore`，
+即 14.5 新增模板类型不被 14.2 枚举识别——按预期不可逆处理，用备份回滚。
+`generated/` 与 `.venv313` 全程完好；收尾重装 `pass=14 fail=0`。
