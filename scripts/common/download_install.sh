@@ -75,10 +75,6 @@ bash scripts/install.sh --no-gui
 # fi
 
 hiddify_bashrc_install_menu
-if [ "$CREATE_EASYSETUP_LINK" == "true" ];then
-    cd /opt/$GITHUB_REPOSITORY/services/panel
-    hiddify-panel-cli set-setting --key create_easysetup_link --val True
-fi
 
 hiddify-panel-cli set-setting --key auto_update --val False
 

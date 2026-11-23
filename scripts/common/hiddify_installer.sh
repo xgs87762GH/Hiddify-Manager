@@ -277,10 +277,6 @@ function post_update_tasks() {
       else
           restart_hiddify_panel start
       fi
-      if [ "$CREATE_EASYSETUP_LINK" == "true" ];then
-          hiddify-panel-cli set-setting --key create_easysetup_link --val True
-      fi
-
       case "$package_mode" in
           release|beta)
               hiddify-panel-cli set-setting --key package_mode --val $package_mode
